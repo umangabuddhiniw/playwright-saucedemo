@@ -15,7 +15,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Get full history for proper sync
+        fetch-depth: 0
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -25,31 +25,49 @@ jobs:
         
     - name: Install dependencies
       run: |
-        # First try npm ci, if fails use npm install
-        npm ci || npm install
+        npm ci
         echo "✅ Dependencies installed successfully"
       
-    - name: Install Playwright
+    - name: Install Playwright browsers
       run: |
         npx playwright install --with-deps
+        npx playwright install chromium
+        echo "Playwright version:"
         npx playwright --version
       
-    - name: Run tests
+    - name: Build project (if needed)
+      run: |
+        npm run build || echo "No build script found, skipping build"
+      
+    - name: Run Playwright tests
       run: |
         echo "🚀 Starting Playwright tests..."
-        npx playwright test || echo "Test execution completed"
+        npx playwright test --reporter=html,list,json
       env:
         CI: true
         NODE_ENV: test
         
-    - name: Upload results
+    - name: Generate Playwright Report
+      if: always()
+      run: |
+        npx playwright show-report playwright-report || echo "Report generation completed"
+        
+    - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: test-results
+        name: playwright-test-results
         path: |
           test-results/
           playwright-report/
           test-results.json
         retention-days: 30
-        if-no-files-found: ignore
+        compression-level: 9
+        
+    - name: Upload HTML report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-html-report
+        path: playwright-report/
+        retention-days: 30

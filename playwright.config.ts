@@ -1,4 +1,3 @@
-// playwright.config.ts
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
@@ -7,7 +6,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : 1,
+  workers: process.env.CI ? 1 : undefined,
   
   globalSetup: './src/tests/global-setup.ts',
   globalTeardown: './src/tests/global-teardown.ts',
@@ -15,20 +14,36 @@ export default defineConfig({
   reporter: [
     ['list'],
     ['./src/utils/testRunner.ts'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['json', { outputFile: 'test-results.json' }]
+    ['html', { 
+      outputFolder: 'playwright-report', 
+      open: 'never' 
+    }],
+    ['json', { 
+      outputFile: 'test-results.json' 
+    }]
   ],
   
   use: {
     baseURL: 'https://www.saucedemo.com',
     
+    // Enhanced screenshot configuration
+    screenshot: {
+      mode: 'only-on-failure',
+      fullPage: true
+    },
+    
+    // Video configuration
     video: process.env.CI ? 'retain-on-failure' : 'on',
+    
+    // Trace configuration
     trace: process.env.CI ? 'on-first-retry' : 'on',
-    screenshot: 'only-on-failure',
     
     ignoreHTTPSErrors: true,
     actionTimeout: 20000,
     navigationTimeout: 30000,
+    
+    // Add viewport here for all projects
+    viewport: { width: 1280, height: 720 },
   },
 
   projects: [
@@ -36,7 +51,6 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 720 },
         
         launchOptions: {
           slowMo: process.env.CI ? 0 : 100,
@@ -57,5 +71,7 @@ export default defineConfig({
 
   outputDir: 'test-results/',
   timeout: 120000,
-  expect: { timeout: 25000 },
+  expect: { 
+    timeout: 25000 
+  },
 });
