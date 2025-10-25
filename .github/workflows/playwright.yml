@@ -8,12 +8,14 @@ on:
 
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 30
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Get all history for proper sync
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -24,31 +26,25 @@ jobs:
     - name: Install dependencies
       run: |
         npm ci
-        # If using TypeScript, install types and build
-        npm install @playwright/test --save-dev
-        npx tsc --version || echo "TypeScript not found, skipping build"
+        # Ensure TypeScript is available
+        npx tsc --version || npm install typescript --save-dev
       
-    - name: Install Playwright browsers
+    - name: Install Playwright
       run: |
         npx playwright install --with-deps
         npx playwright install chromium
       
-    - name: Build TypeScript (if needed)
+    - name: Build TypeScript files
       run: |
-        # If you have a build script in package.json
-        npm run build || echo "No build script found"
-        # Or compile TypeScript directly
-        npx tsc --noEmit || echo "TypeScript compilation check completed"
+        # Compile TypeScript to catch errors early
+        npx tsc --noEmit || echo "TypeScript check completed"
       
-    - name: Run Playwright tests with detailed output
+    - name: Run Playwright tests
       run: |
-        echo "🚀 Starting Playwright tests..."
-        npx playwright test --verbose
-        # Or if that fails, try with more debugging:
-        # npx playwright test --headed --timeout=60000
+        echo "Starting Playwright tests..."
+        npx playwright test
       env:
         CI: true
-        NODE_ENV: test
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -58,4 +54,5 @@ jobs:
         path: |
           test-results/
           playwright-report/
+          test-results.json
         retention-days: 30
