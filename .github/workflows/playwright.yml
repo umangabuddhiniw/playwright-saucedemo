@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 30
     runs-on: ubuntu-latest
 
     steps:
@@ -24,32 +24,29 @@ jobs:
     - name: Install dependencies
       run: |
         npm ci
-        # CRITICAL: Install missing dependencies that might be global on your local machine
-        npm install typescript @types/node --save-dev
+        # CRITICAL: Ensure TypeScript can compile files
+        npx tsc --version || npm install typescript --save-dev
       
     - name: Install Playwright
       run: |
         npx playwright install --with-deps
         npx playwright install chromium
       
-    - name: Debug - Check what's actually failing
+    - name: Verify TypeScript compilation
       run: |
-        echo "=== DEBUG INFO ==="
-        echo "Testing network connectivity..."
-        curl -I https://www.saucedemo.com || echo "❌ Network issue"
-        echo "Checking custom files..."
-        npx tsc --noEmit src/utils/testRunner.ts 2>/dev/null || echo "⚠️ testRunner.ts may have issues"
-        npx tsc --noEmit src/tests/global-setup.ts 2>/dev/null || echo "⚠️ global-setup.ts may have issues"
+        echo "🔧 Verifying TypeScript compilation..."
+        # This will show if there are compilation issues
+        npx tsc --noEmit
+        echo "✅ TypeScript compilation check passed"
       
-    - name: Run tests with detailed error reporting
+    - name: Run Playwright tests
       run: |
-        echo "🚀 Running tests..."
-        # Run with detailed output to see REAL errors
-        npx playwright test --reporter=line --timeout=120000
+        echo "🚀 Starting Playwright tests..."
+        npx playwright test
       env:
         CI: true
         
-    - name: Upload results
+    - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
