@@ -3,11 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './src/tests',
   
-  // SIMPLIFIED & RELIABLE SETTINGS
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1, // Fixed - undefined causes CI issues
+  workers: process.env.CI ? 1 : undefined,
   
   globalSetup: './src/tests/global-setup.ts',
   globalTeardown: './src/tests/global-teardown.ts',
@@ -27,24 +26,24 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // SIMPLIFIED ARTIFACT SETTINGS
-    screenshot: 'on',
-    video: 'on', 
-    trace: 'on',
+    // Enhanced screenshot configuration
+    screenshot: {
+      mode: 'only-on-failure',
+      fullPage: true
+    },
+    
+    // Video configuration
+    video: process.env.CI ? 'retain-on-failure' : 'on',
+    
+    // Trace configuration
+    trace: process.env.CI ? 'on-first-retry' : 'on',
     
     ignoreHTTPSErrors: true,
-    actionTimeout: 30000, // Increased for CI
-    navigationTimeout: 45000, // Increased for CI
-    viewport: { width: 1280, height: 720 },
+    actionTimeout: 20000,
+    navigationTimeout: 30000,
     
-    // SIMPLIFIED BROWSER ARGS
-    launchOptions: {
-      args: [
-        '--no-sandbox',
-        '--disable-dev-shm-usage',
-        '--window-size=1280,720'
-      ]
-    }
+    // Add viewport here for all projects
+    viewport: { width: 1280, height: 720 },
   },
 
   projects: [
@@ -52,7 +51,20 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        viewport: { width: 1280, height: 720 },
+        
+        launchOptions: {
+          slowMo: process.env.CI ? 0 : 100,
+          args: [
+            '--window-size=1280,720',
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding'
+          ]
+        }
       },
     },
   ],
@@ -60,6 +72,6 @@ export default defineConfig({
   outputDir: 'test-results/',
   timeout: 120000,
   expect: { 
-    timeout: 30000 // Increased for CI
+    timeout: 25000 
   },
 });

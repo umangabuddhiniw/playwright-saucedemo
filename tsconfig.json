@@ -20,7 +20,6 @@
       "@pages/*": ["./src/pages/*"],
       "@data/*": ["./data/*"]
     }
-    // ❌ REMOVED: "noEmit": true
   },
   "include": [
     "src/**/*", 
