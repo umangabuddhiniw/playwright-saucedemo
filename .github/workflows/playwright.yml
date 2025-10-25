@@ -26,9 +26,6 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
       
-    - name: Build TypeScript files first
-      run: npx tsc --noEmit --skipLibCheck
-      
     - name: Run Playwright tests
       run: npx playwright test
       

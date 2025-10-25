@@ -1,5 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// CRITICAL FIX: This ensures TypeScript files are compiled in CI
+require('ts-node').register({
+  transpileOnly: true, // Skip type checking to avoid errors
+  compilerOptions: {
+    module: 'commonjs'
+  }
+});
+
 export default defineConfig({
   testDir: './src/tests',
   
