@@ -33,14 +33,14 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // FIXED: Always capture screenshots
-    screenshot: 'on',
+    // FIXED: Simple string format that works everywhere
+    screenshot: 'on', // ✅ Captures screenshots for ALL tests
     
-    // FIXED: Always record videos
-    video: 'on',
+    // FIXED: Simple string format that works everywhere  
+    video: 'on', // ✅ Records videos for ALL tests
     
-    // FIXED: Always capture traces
-    trace: 'on',
+    // FIXED: Simple string format
+    trace: 'on', // ✅ Captures traces for ALL tests
     
     ignoreHTTPSErrors: true,
     actionTimeout: 20000,
@@ -55,9 +55,9 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
         
-        // DOUBLE ENSURED: Project-specific overrides
-        screenshot: 'on',
-        video: 'on',
+        // FIXED: Project-specific overrides with simple strings
+        screenshot: 'on', // ✅ Force screenshots
+        video: 'on', // ✅ Force videos
         
         launchOptions: {
           slowMo: process.env.CI ? 0 : 100,

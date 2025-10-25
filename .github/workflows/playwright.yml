@@ -26,8 +26,8 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
       
-    - name: Run Playwright tests with forced artifacts
-      run: npx playwright test --video=on --screenshot=on
+    - name: Run Playwright tests
+      run: npx playwright test
       
     - name: Check video files
       run: |
