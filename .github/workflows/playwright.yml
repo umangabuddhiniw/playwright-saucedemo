@@ -14,8 +14,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -24,137 +22,46 @@ jobs:
         cache: 'npm'
         
     - name: Install dependencies
-      run: |
-        npm ci
-        npm list playwright typescript ts-node @playwright/test || echo "Dependency check completed"
+      run: npm ci
       
-    - name: Install Playwright Browsers
-      run: |
-        npx playwright install --with-deps
-        npx playwright --version
-      
-    - name: Cache Playwright browsers
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/ms-playwright
-        key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-playwright-
+    - name: Install Playwright
+      run: npx playwright install --with-deps
     
-    - name: Verify setup
-      run: |
-        echo "🔍 Verifying project structure..."
-        ls -la src/tests/ || echo "Tests directory check"
-        npx playwright test --list --reporter=line > /dev/null 2>&1 || echo "Test listing completed"
-      
-    - name: Run Playwright tests
-      run: |
-        echo "🚀 Starting Playwright tests..."
-        npx playwright test || echo "Test execution completed"
+    - name: Run tests
+      run: npx playwright test
       env:
         CI: true
-        NODE_ENV: test
         
-    - name: Check generated artifacts
-      if: always()
-      run: |
-        echo "📁 Checking generated files..."
-        echo "=== All files in test-results/ ==="
-        find test-results/ -type f 2>/dev/null | head -20 || echo "No test-results files found"
-        echo "=== All files in project root ==="
-        find . -name "*.html" -o -name "*.json" -o -name "*.log" | head -10 || echo "No report files found"
-        
-    - name: Upload All Test Results
+    - name: Upload any results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-all-results
+        name: test-results
         path: |
           test-results/
           playwright-report/
           test-results.json
         retention-days: 30
-        
-    - name: Upload Media Files (PNG + JPEG)
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: playwright-media
-        path: |
-          test-results/**/*.png
-          test-results/**/*.jpeg
-          test-results/**/*.jpg
-          test-results/**/*.webm
-        retention-days: 14
-
-    - name: Upload Custom Reports
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: custom-reports
-        path: |
-          test-results/reports/
-          test-results/logs/
-          test-results/screenshots/
-        retention-days: 30
+        if-no-files-found: ignore  # ✅ CRITICAL: This eliminates warnings
 
   status:
-    name: Test Status Summary
+    name: Test Status
     runs-on: ubuntu-latest
     needs: test
     if: always()
 
     steps:
-    - name: Download Test Results
-      uses: actions/download-artifact@v4
-      if: always()
-      with:
-        name: playwright-all-results
-        path: downloaded-results/
-        
-    - name: Analyze Results
-      if: always()
+    - name: Report status
       run: |
         echo "=========================================="
-        echo "🎯 TEST EXECUTION SUMMARY"
+        echo "🎯 TEST EXECUTION COMPLETED"
         echo "=========================================="
-        echo "Workflow Status: ${{ needs.test.result }}"
+        echo "Status: ${{ needs.test.result }}"
         echo ""
-        
-        # Check what files were actually generated
-        echo "📊 Generated Artifacts:"
-        if [ -d "downloaded-results" ]; then
-          echo "✅ test-results/ - Raw test results"
-          find downloaded-results/test-results/ -name "*.png" -o -name "*.jpeg" -o -name "*.jpg" 2>/dev/null | wc -l | xargs echo "   📸 Screenshots:"
-          find downloaded-results/test-results/ -name "*.webm" 2>/dev/null | wc -l | xargs echo "   🎥 Videos:"
-          find downloaded-results/test-results/ -name "*.html" -o -name "*.json" 2>/dev/null | wc -l | xargs echo "   📄 Reports:"
+        if [ "${{ needs.test.result }}" == "success" ]; then
+          echo "✅ ALL TESTS PASSED"
+          echo "💡 No artifacts? That's normal - tests passed quickly!"
         else
-          echo "❌ No test results downloaded"
+          echo "🔧 Check workflow logs for details"
         fi
-        
-        echo ""
-        echo "📦 Available Artifacts:"
-        echo "   1. playwright-all-results - Complete test results"
-        echo "   2. playwright-media - Screenshots & videos" 
-        echo "   3. custom-reports - Custom HTML/JSON reports"
-        echo ""
-        
-        case "${{ needs.test.result }}" in
-          "success")
-            echo "✅ ALL TESTS PASSED"
-            echo "   🚀 Ready for deployment"
-            ;;
-          "failure")
-            echo "❌ TESTS FAILED"
-            echo "   🔧 Check artifacts for debugging"
-            ;;
-          "cancelled")
-            echo "⏹️ TESTS CANCELLED"
-            echo "   ⚡ Likely due to timeout"
-            ;;
-          *)
-            echo "⚠️ TESTS COMPLETED WITH UNKNOWN STATUS"
-            ;;
-        esac
         echo "=========================================="
