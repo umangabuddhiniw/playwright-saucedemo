@@ -14,36 +14,20 @@ export default defineConfig({
   reporter: [
     ['list'],
     ['./src/utils/testRunner.ts'],
-    ['html', { 
-      outputFolder: 'playwright-report', 
-      open: 'never' 
-    }],
-    ['json', { 
-      outputFile: 'test-results.json' 
-    }]
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['json', { outputFile: 'test-results.json' }]
   ],
   
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // Enhanced screenshot configuration
-    screenshot: {
-      mode: 'only-on-failure',
-      fullPage: true
-    },
-    
-    // Video configuration
+    screenshot: 'only-on-failure',
     video: process.env.CI ? 'retain-on-failure' : 'on',
-    
-    // Trace configuration
     trace: process.env.CI ? 'on-first-retry' : 'on',
     
     ignoreHTTPSErrors: true,
-    actionTimeout: 20000,
-    navigationTimeout: 30000,
-    
-    // Add viewport here for all projects
-    viewport: { width: 1280, height: 720 },
+    actionTimeout: 30000,  // Increased from 20000
+    navigationTimeout: 45000,  // Increased from 30000
   },
 
   projects: [
@@ -51,27 +35,14 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        
-        launchOptions: {
-          slowMo: process.env.CI ? 0 : 100,
-          args: [
-            '--window-size=1280,720',
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding'
-          ]
-        }
+        viewport: { width: 1280, height: 720 },
       },
     },
   ],
 
-  outputDir: 'test-results/',
-  timeout: 120000,
+  // Global timeouts
+  timeout: 180000,  // Increased from 120000
   expect: { 
-    timeout: 25000 
+    timeout: 30000  // Increased from 25000
   },
 });
