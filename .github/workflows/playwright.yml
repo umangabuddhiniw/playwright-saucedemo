@@ -29,6 +29,14 @@ jobs:
     - name: Run Playwright tests
       run: npx playwright test
       
+    - name: Check video files
+      run: |
+        echo "🎥 Looking for video files..."
+        find test-results -name "*.webm" | while read file; do
+          echo "Video: $file"
+        done
+        echo "Total videos: $(find test-results -name "*.webm" | wc -l)"
+        
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
