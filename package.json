@@ -4,39 +4,57 @@
   "description": "SauceDemo E-commerce automation with Playwright and TypeScript",
   "scripts": {
     "test": "npx playwright test",
+    "test:ci": "npx playwright test --workers=2",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:ui": "npx playwright test --ui",
-    "test:videos": "npm run clean && npx playwright test --project=chromium",
-    "test:video-users": "npm run clean && npx playwright test src/tests/standard-user-video.spec.ts src/tests/problem-user-video.spec.ts src/tests/locked-user-video.spec.ts src/tests/error-user-video.spec.ts --project=chromium",
-    "test:purchase-flows": "npm run clean && npx playwright test src/tests/purchaseFlow.spec.ts --project=chromium",
-    "test:all-browsers": "npm run clean && npx playwright test",
-    "test:ci": "npx playwright test --headed --workers=1",
-    "test:clean": "npm run clean && npx playwright test --reporter=html",
-    "test:fresh": "npm run clean && npx playwright test",
-    "test:with-reports": "npm run clean && npx playwright test --project=chromium && npm run generate-reports",
-    "test:with-logs": "npm run clean && npx playwright test --project=chromium 2>&1 | tee test-results/logs/console-output.log",
-    "report": "npx playwright show-report",
-    "report:custom": "node -e \"const fs=require('fs');const files=fs.readdirSync('test-results/reports').filter(f=>f.endsWith('.html'));if(files.length>0){console.log('Opening:',files[0]);require('child_process').execSync('open test-results/reports/'+files[0]);}else{console.log('No custom reports found. Run test:with-reports first.')}\"",
-    "generate-reports": "node -e \"require('./src/utils/testRunner').generateAllReports()\"",
-    "view-logs": "node -e \"const fs=require('fs');const path=require('path');const logsDir=path.join(process.cwd(),'test-results','logs');if(fs.existsSync(logsDir)){const files=fs.readdirSync(logsDir);console.log('Log files available:');files.forEach(file=>console.log('- '+file));}else{console.log('No log files found. Run tests first.');}\"",
+    
+    "test:chromium": "npx playwright test --project=chromium",
+    "test:firefox": "npx playwright test --project=firefox", 
+    "test:webkit": "npx playwright test --project=webkit",
+    
+    "test:video-users": "npx playwright test src/tests/standard-user-video.spec.ts src/tests/problem-user-video.spec.ts src/tests/locked-user-video.spec.ts src/tests/error-user-video.spec.ts --project=chromium",
+    "test:purchase-flows": "npx playwright test src/tests/purchaseFlow.spec.ts --project=chromium",
+    
+    "test:report": "npx ts-node src/utils/testRunner.ts",
+    "test:full": "npm run test && npm run test:report",
+    
+    "test:parallel": "npx playwright test --workers=4",
+    "test:retry": "npx playwright test --retries=2",
+    "test:trace": "npx playwright test --trace=on",
+    "test:slow": "npx playwright test --timeout=60000",
+    
+    "report": "npx playwright show-report playwright-report",
+    "report:open": "npx playwright show-report playwright-report",
+    
+    "clean": "npx rimraf test-results playwright-report",
+    "clean:all": "npx rimraf test-results playwright-report node_modules package-lock.json",
+    "clean:install": "npm run clean:all && npm install",
+    
     "install:browsers": "npx playwright install --with-deps",
-    "clean": "rm -rf test-results playwright-report screenshots",
-    "clean:all": "rm -rf test-results playwright-report screenshots node_modules package-lock.json",
+    "install:ci": "npx playwright install chromium",
+    
     "typecheck": "npx tsc --noEmit",
-    "lint": "npx tsc --noEmit --skipLibCheck",
-    "build": "npx tsc"
+    "lint": "npx eslint . --ext .ts,.tsx",
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix",
+    
+    "structure": "find test-results -type f -name '*.webm' -o -name '*.html' -o -name '*.json' -o -name '*.log' -o -name '*.png' | head -20 || echo 'No test results found'",
+    "verify": "npm run typecheck && npm run test:chromium -- --reporter=line"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
     "@types/node": "^20.0.0",
     "@types/winston": "^2.4.4",
     "typescript": "^5.3.0",
-    "winston": "^3.18.3"
+    "winston": "^3.18.3",
+    "rimraf": "^5.0.5",
+    "ts-node": "^10.9.0"
   },
+  "dependencies": {},
   "keywords": [
     "playwright",
-    "automation",
+    "automation", 
     "testing",
     "saucedemo",
     "typescript",
@@ -44,5 +62,8 @@
     "browser-testing"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

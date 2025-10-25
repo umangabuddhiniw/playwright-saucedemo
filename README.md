@@ -13,7 +13,6 @@ A comprehensive test automation framework for SauceDemo e-commerce platform usin
 •	🛡️ Comprehensive Error Handling - Graceful failure management
 
 🏗️ Project Structure
-text
 project-root/
 ├── .github/
 │   └── workflows/
@@ -26,9 +25,11 @@ project-root/
 │   │   ├── CheckoutCompletePage.ts
 │   │   ├── CheckoutInfoPage.ts
 │   │   ├── LoginPage.ts
-│   │   └── OverviewPage.ts
+│   │   ├── OverviewPage.ts
 │   │   └── ProductsPage.ts
 │   ├── tests/
+│   │   ├── global-setup.ts          
+│   │   ├── global-teardown.ts       
 │   │   ├── error-user-video.spec.ts
 │   │   ├── locked-user-video.spec.ts
 │   │   ├── problem-user-video.spec.ts
@@ -44,7 +45,7 @@ project-root/
 │   └── types/
 │       └── credentials.d.ts
 ├── .gitignore
-├── global-setup.ts
+├── package-lock.json
 ├── package.json
 ├── playwright.config.ts
 ├── README.md
@@ -152,39 +153,6 @@ Screenshot Coverage (All Users)
 •	Step-by-step state documentation for ALL user types
 •	Comprehensive UI state capture at each test milestone
 •	Efficient storage and quick review capabilities
-
-🔧 Technical Implementation
-
-Data-Driven Testing
-typescript
-// Type-safe credential handling
-interface User {
-  username: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  postalCode: string;
-}
-
-// Conditional execution based on user type
-users.forEach(user => {
-  test(`Checkout flow - ${user.username}`, async ({ page }) => {
-    // User-specific test logic
-  });
-});
-Dynamic Product Selection
-typescript
-// Automatically selects 2 most expensive products
-const products = await page.locator('.inventory_item').all();
-const pricedProducts = await Promise.all(
-  products.map(async (product) => ({
-    element: product,
-    price: await getProductPrice(product)
-  }))
-);
-const expensiveProducts = pricedProducts
-  .sort((a, b) => b.price - a.price)
-  .slice(0, 2);
 
 Cart & Checkout Validation
 •	Product Verification: Asserts correct product names and prices in cart

@@ -11,25 +11,29 @@
     "outDir": "./dist",
     "rootDir": ".",
     "resolveJsonModule": true,
-    "types": ["node"],
+    "types": ["node", "@playwright/test"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@utils/*": ["./src/utils/*"]
+      "@utils/*": ["./src/utils/*"],
+      "@tests/*": ["./src/tests/*"],
+      "@pages/*": ["./src/pages/*"],
+      "@data/*": ["./data/*"]
     },
-    // ✅ ADD ONLY THIS ONE:
     "noEmit": true
   },
   "include": [
     "src/**/*", 
-    "global-setup.ts", 
-    "playwright.config.ts", 
+    "playwright.config.ts",
     "data/**/*"
   ],
   "exclude": [
     "node_modules", 
     "dist", 
     "test-results", 
-    "playwright-report"
+    "playwright-report",
+    "blob-report",
+    "screenshots",
+    "videos"
   ]
 }

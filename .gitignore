@@ -121,7 +121,7 @@ temp/
 # videos/
 
 # Package lock files (choose one based on your package manager)
-# package-lock.json  # if using npm
+package-lock.json  # if using npm
 # yarn.lock         # if using yarn
 # pnpm-lock.yaml    # if using pnpm
 

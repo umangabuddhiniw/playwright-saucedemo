@@ -1,16 +1,20 @@
-declare module '../../data/credentials.json' {
-  interface User {
+// src/types/credentials.d.ts
+
+// Export the interfaces directly
+export interface UserCredentials {
     username: string;
     password: string;
     firstName: string;
     lastName: string;
     postalCode: string;
-  }
+}
 
-  interface Credentials {
-    users: User[];
-  }
+export interface CredentialsData {
+    users: UserCredentials[];
+}
 
-  const credentials: Credentials;
-  export default credentials;
+// Keep the module declaration for JSON imports
+declare module '../../data/credentials.json' {
+    const value: CredentialsData;
+    export default value;
 }
