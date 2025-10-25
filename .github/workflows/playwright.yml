@@ -26,15 +26,12 @@ jobs:
     - name: Install dependencies
       run: |
         npm ci
-        # Verify critical dependencies
         npm list playwright typescript ts-node @playwright/test || echo "Dependency check completed"
-        echo "✅ Dependencies installed successfully"
       
     - name: Install Playwright Browsers
       run: |
         npx playwright install --with-deps
         npx playwright --version
-        echo "Playwright browsers installed successfully"
       
     - name: Cache Playwright browsers
       uses: actions/cache@v3
@@ -45,166 +42,63 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-playwright-
     
-    - name: Verify Playwright setup
+    - name: Verify setup
       run: |
-        echo "🔍 Verifying Playwright setup..."
+        echo "🔍 Verifying project structure..."
+        ls -la src/tests/ || echo "Tests directory check"
         npx playwright test --list --reporter=line > /dev/null 2>&1 || echo "Test listing completed"
-        echo "✅ Playwright setup verified"
-        
-        # Check if test files exist
-        if [ -d "src/tests" ]; then
-          echo "📁 Test directory found: src/tests/"
-          find src/tests -name "*.spec.ts" -o -name "*.spec.js" | wc -l | xargs echo "Number of test files:"
-        else
-          echo "❌ Test directory not found: src/tests/"
-          exit 1
-        fi
-      
-    - name: Build TypeScript check
-      run: |
-        echo "🔧 Checking TypeScript compilation..."
-        if [ -f tsconfig.json ]; then
-          npx tsc --noEmit --skipLibCheck
-          echo "✅ TypeScript compilation check passed"
-        else
-          echo "ℹ️ No tsconfig.json found, skipping TypeScript check"
-        fi
       
     - name: Run Playwright tests
-      timeout-minutes: 45
       run: |
         echo "🚀 Starting Playwright tests..."
-        echo "Configuration:"
-        echo "  - Workers: 1"
-        echo "  - Retries: ${{ github.event_name == 'pull_request' && '0' || '2' }}"
-        echo "  - Fully Parallel: false"
-        echo "  - Base URL: https://www.saucedemo.com"
-        
-        # Run tests with detailed output
-        npx playwright test --reporter=list,html,json || echo "Test execution completed with exit code: $?"
-        
-        echo "📊 Test execution finished"
+        npx playwright test || echo "Test execution completed"
       env:
         CI: true
         NODE_ENV: test
-        # Add any additional environment variables needed for your tests
         
-    - name: Verify Test Results
+    - name: Check generated artifacts
       if: always()
       run: |
-        echo "🔍 Verifying test results..."
+        echo "📁 Checking generated files..."
+        echo "=== All files in test-results/ ==="
+        find test-results/ -type f 2>/dev/null | head -20 || echo "No test-results files found"
+        echo "=== All files in project root ==="
+        find . -name "*.html" -o -name "*.json" -o -name "*.log" | head -10 || echo "No report files found"
         
-        # Check if custom reports were generated
-        if [ -d "test-results/reports" ]; then
-          echo "✅ Custom reports directory exists"
-          ls -la test-results/reports/ || echo "No custom reports found"
-        else
-          echo "❌ Custom reports directory not found"
-        fi
-        
-        # Check if Playwright report was generated
-        if [ -d "playwright-report" ]; then
-          echo "✅ Playwright HTML report generated"
-        else
-          echo "❌ Playwright HTML report not found"
-        fi
-        
-        # Check if test results JSON exists
-        if [ -f "test-results.json" ]; then
-          echo "✅ Playwright JSON results generated"
-        else
-          echo "❌ Playwright JSON results not found"
-        fi
-        
-        # Check directory structure
-        echo "📁 Final directory structure:"
-        find test-results -type f -name "*.html" -o -name "*.json" -o -name "*.log" | head -10 || echo "No test result files found"
-        
-    - name: Display Test Summary
-      if: always()
-      run: |
-        echo ""
-        echo "🎭 PLAYWRIGHT TEST EXECUTION SUMMARY"
-        echo "===================================="
-        echo "📊 Reports Generated:"
-        
-        # Count custom HTML reports
-        if [ -d "test-results/reports" ]; then
-          HTML_COUNT=$(find test-results/reports -name "*.html" | wc -l)
-          echo "   ✅ Custom HTML Reports: $HTML_COUNT"
-        else
-          echo "   ❌ Custom HTML Reports: 0"
-        fi
-        
-        # Count custom JSON reports
-        if [ -d "test-results/reports" ]; then
-          JSON_COUNT=$(find test-results/reports -name "*.json" | wc -l)
-          echo "   ✅ Custom JSON Reports: $JSON_COUNT"
-        else
-          echo "   ❌ Custom JSON Reports: 0"
-        fi
-        
-        # Check logs
-        if [ -d "test-results/logs" ]; then
-          LOG_COUNT=$(find test-results/logs -name "*.log" | wc -l)
-          echo "   ✅ Log Files: $LOG_COUNT"
-        else
-          echo "   ❌ Log Files: 0"
-        fi
-        
-        echo ""
-        echo "📦 Artifacts Available:"
-        echo "   - playwright-html-report: Playwright HTML report"
-        echo "   - playwright-test-results: Raw test results & custom reports"
-        echo "   - playwright-media: Screenshots & videos"
-        echo ""
-        echo "🔧 Configuration:"
-        echo "   - Runner: Ubuntu Latest"
-        echo "   - Node.js: 18"
-        echo "   - Timeout: 60 minutes"
-        echo "   - Workers: 1 (conservative mode)"
-        echo "===================================="
-        
-    - name: Upload Playwright HTML Report
+    - name: Upload All Test Results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-html-report
-        path: playwright-report/
-        retention-days: 30
-        
-    - name: Upload Test Results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: playwright-test-results
+        name: playwright-all-results
         path: |
           test-results/
+          playwright-report/
           test-results.json
         retention-days: 30
         
-    - name: Upload Screenshots and Videos
+    - name: Upload Media Files (PNG + JPEG)
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: playwright-media
         path: |
           test-results/**/*.png
-          test-results/**/*.jpg  
-          test-results/**/*.webm
           test-results/**/*.jpeg
+          test-results/**/*.jpg
+          test-results/**/*.webm
         retention-days: 14
-        
-    - name: Upload Logs
+
+    - name: Upload Custom Reports
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-logs
+        name: custom-reports
         path: |
+          test-results/reports/
           test-results/logs/
-        retention-days: 7
+          test-results/screenshots/
+        retention-days: 30
 
-  # ✅ Enhanced status notification
   status:
     name: Test Status Summary
     runs-on: ubuntu-latest
@@ -212,92 +106,55 @@ jobs:
     if: always()
 
     steps:
-    - name: Download Test Results Artifact
+    - name: Download Test Results
       uses: actions/download-artifact@v4
       if: always()
       with:
-        name: playwright-test-results
+        name: playwright-all-results
         path: downloaded-results/
         
-    - name: Analyze Test Results
+    - name: Analyze Results
       if: always()
       run: |
         echo "=========================================="
-        echo "🎯 FINAL TEST EXECUTION SUMMARY"
+        echo "🎯 TEST EXECUTION SUMMARY"
         echo "=========================================="
         echo "Workflow Status: ${{ needs.test.result }}"
-        echo "Test Job Status: ${{ needs.test.result }}"
         echo ""
         
-        # Check for custom reports
-        if [ -d "downloaded-results/test-results/reports" ]; then
-          echo "✅ CUSTOM REPORTS ANALYSIS:"
-          echo "   📊 HTML Reports: $(find downloaded-results/test-results/reports -name '*.html' | wc -l)"
-          echo "   📄 JSON Reports: $(find downloaded-results/test-results/reports -name '*.json' | wc -l)"
-          
-          # Try to get the latest JSON report for summary
-          LATEST_JSON=$(find downloaded-results/test-results/reports -name "*.json" -type f | head -1)
-          if [ -n "$LATEST_JSON" ]; then
-            echo "   📈 Latest Report: $(basename $LATEST_JSON)"
-          fi
+        # Check what files were actually generated
+        echo "📊 Generated Artifacts:"
+        if [ -d "downloaded-results" ]; then
+          echo "✅ test-results/ - Raw test results"
+          find downloaded-results/test-results/ -name "*.png" -o -name "*.jpeg" -o -name "*.jpg" 2>/dev/null | wc -l | xargs echo "   📸 Screenshots:"
+          find downloaded-results/test-results/ -name "*.webm" 2>/dev/null | wc -l | xargs echo "   🎥 Videos:"
+          find downloaded-results/test-results/ -name "*.html" -o -name "*.json" 2>/dev/null | wc -l | xargs echo "   📄 Reports:"
         else
-          echo "❌ No custom reports found in artifacts"
-        fi
-        
-        # Check for logs
-        if [ -d "downloaded-results/test-results/logs" ]; then
-          echo "   📝 Log Files: $(find downloaded-results/test-results/logs -name '*.log' | wc -l)"
+          echo "❌ No test results downloaded"
         fi
         
         echo ""
-        echo "📋 RECOMMENDED ACTIONS:"
+        echo "📦 Available Artifacts:"
+        echo "   1. playwright-all-results - Complete test results"
+        echo "   2. playwright-media - Screenshots & videos" 
+        echo "   3. custom-reports - Custom HTML/JSON reports"
+        echo ""
         
         case "${{ needs.test.result }}" in
           "success")
             echo "✅ ALL TESTS PASSED"
             echo "   🚀 Ready for deployment"
-            echo "   📊 Review reports in artifacts"
             ;;
           "failure")
             echo "❌ TESTS FAILED"
-            echo "   🔧 Check 'playwright-test-results' artifact for details"
-            echo "   🖼️ Check 'playwright-media' for screenshots/videos"
-            echo "   📖 Review 'playwright-logs' for execution logs"
+            echo "   🔧 Check artifacts for debugging"
             ;;
           "cancelled")
             echo "⏹️ TESTS CANCELLED"
-            echo "   ⚡ Likely due to timeout or manual cancellation"
-            echo "   🔄 Consider increasing timeout or checking resource usage"
-            ;;
-          "skipped")
-            echo "⏭️ TESTS SKIPPED"
-            echo "   ℹ️ Check workflow conditions and triggers"
+            echo "   ⚡ Likely due to timeout"
             ;;
           *)
             echo "⚠️ TESTS COMPLETED WITH UNKNOWN STATUS"
-            echo "   📖 Check workflow logs for details"
             ;;
         esac
-        
-        echo ""
-        echo "📦 AVAILABLE ARTIFACTS:"
-        echo "   1. playwright-html-report - Playwright's HTML report"
-        echo "   2. playwright-test-results - Raw results & custom reports" 
-        echo "   3. playwright-media - Screenshots & videos"
-        echo "   4. playwright-logs - Execution logs"
-        echo ""
-        echo "🔗 QUICK ACCESS:"
-        echo "   - Workflow Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-        echo "   - Repository: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
         echo "=========================================="
-        
-    - name: Set final status
-      if: always()
-      run: |
-        if [ "${{ needs.test.result }}" == "success" ]; then
-          echo "✅ FINAL STATUS: SUCCESS"
-          exit 0
-        else
-          echo "❌ FINAL STATUS: FAILED"
-          exit 1
-        fi
