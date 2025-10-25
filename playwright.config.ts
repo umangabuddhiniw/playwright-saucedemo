@@ -33,19 +33,34 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // FIXED: Simple string format that works everywhere
-    screenshot: 'on', // ✅ Captures screenshots for ALL tests
-    
-    // FIXED: Simple string format that works everywhere  
-    video: 'on', // ✅ Records videos for ALL tests
-    
-    // FIXED: Simple string format
-    trace: 'on', // ✅ Captures traces for ALL tests
+    screenshot: 'on',
+    video: 'on', 
+    trace: 'on',
     
     ignoreHTTPSErrors: true,
     actionTimeout: 20000,
     navigationTimeout: 30000,
     viewport: { width: 1280, height: 720 },
+
+    // CRITICAL FIX: CI-specific rendering configuration
+    launchOptions: {
+      args: process.env.CI ? [
+        // GitHub CI-specific flags for proper rendering
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-web-security',
+        '--window-size=1280,720',
+        '--force-device-scale-factor=1', // ✅ Prevents scaling issues
+        '--disable-gpu', // ✅ Essential for headless rendering
+        '--disable-software-rasterizer',
+        '--disable-font-subpixel-positioning',
+        '--enable-font-antialiasing',
+      ] : [
+        // Local environment (your working setup)
+        '--window-size=1280,720',
+        '--disable-web-security',
+      ]
+    }
   },
 
   projects: [
@@ -55,22 +70,11 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
         
-        // FIXED: Project-specific overrides with simple strings
-        screenshot: 'on', // ✅ Force screenshots
-        video: 'on', // ✅ Force videos
+        screenshot: 'on',
+        video: 'on',
         
         launchOptions: {
-          slowMo: process.env.CI ? 0 : 100,
-          args: [
-            '--window-size=1280,720',
-            '--no-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding'
-          ]
+          slowMo: process.env.CI ? 100 : 50, // ✅ Slower for CI rendering
         }
       },
     },

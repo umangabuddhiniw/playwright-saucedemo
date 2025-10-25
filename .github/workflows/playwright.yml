@@ -26,6 +26,10 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
       
+    # CRITICAL FIX: Build TypeScript first to ensure no compilation issues
+    - name: Build TypeScript
+      run: npx tsc --noEmit --skipLibCheck
+      
     - name: Run Playwright tests
       run: npx playwright test
       
@@ -33,7 +37,7 @@ jobs:
       run: |
         echo "🎥 Looking for video files..."
         find test-results -name "*.webm" | while read file; do
-          echo "Video: $file"
+          echo "Video: $(basename $file)"
         done
         echo "Total videos: $(find test-results -name "*.webm" | wc -l)"
         
@@ -41,7 +45,7 @@ jobs:
       run: |
         echo "📸 Looking for screenshot files..."
         find test-results -name "*.png" | while read file; do
-          echo "Screenshot: $file"
+          echo "Screenshot: $(basename $file)"
         done | head -10
         echo "Total screenshots: $(find test-results -name "*.png" | wc -l)"
         
