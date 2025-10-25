@@ -22,22 +22,18 @@ jobs:
         cache: 'npm'
         
     - name: Install dependencies
-      run: |
-        npm ci
-        # CRITICAL: Ensure TypeScript can compile files
-        npx tsc --version || npm install typescript --save-dev
+      run: npm ci
       
     - name: Install Playwright
       run: |
         npx playwright install --with-deps
         npx playwright install chromium
       
-    - name: Verify TypeScript compilation
+    - name: Compile TypeScript
       run: |
-        echo "🔧 Verifying TypeScript compilation..."
-        # This will show if there are compilation issues
-        npx tsc --noEmit
-        echo "✅ TypeScript compilation check passed"
+        echo "🔧 Compiling TypeScript..."
+        npx tsc
+        echo "✅ TypeScript compilation completed"
       
     - name: Run Playwright tests
       run: |

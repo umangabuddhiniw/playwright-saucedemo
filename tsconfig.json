@@ -19,8 +19,8 @@
       "@tests/*": ["./src/tests/*"],
       "@pages/*": ["./src/pages/*"],
       "@data/*": ["./data/*"]
-    },
-    "noEmit": true
+    }
+    // ❌ REMOVED: "noEmit": true
   },
   "include": [
     "src/**/*", 
