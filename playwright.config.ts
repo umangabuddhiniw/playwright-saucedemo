@@ -1,6 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// CRITICAL FIX: This ensures TypeScript files are compiled in CI
 require('ts-node').register({
   transpileOnly: true,
   compilerOptions: {
@@ -34,23 +33,18 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // KEEP your original screenshot config - it works locally
-    screenshot: {
-      mode: 'only-on-failure',
-      fullPage: true
-    },
+    // FIXED: Always capture screenshots
+    screenshot: 'on',
     
-    // FIX: Change video to always record in both environments
-    video: 'on', // ✅ Simple fix - always record videos
+    // FIXED: Always record videos
+    video: 'on',
     
-    // KEEP your original trace config
-    trace: process.env.CI ? 'on-first-retry' : 'on',
+    // FIXED: Always capture traces
+    trace: 'on',
     
     ignoreHTTPSErrors: true,
     actionTimeout: 20000,
     navigationTimeout: 30000,
-    
-    // Add viewport here for all projects
     viewport: { width: 1280, height: 720 },
   },
 
@@ -59,6 +53,11 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 720 },
+        
+        // DOUBLE ENSURED: Project-specific overrides
+        screenshot: 'on',
+        video: 'on',
         
         launchOptions: {
           slowMo: process.env.CI ? 0 : 100,

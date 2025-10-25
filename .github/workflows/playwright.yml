@@ -26,8 +26,8 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
       
-    - name: Run Playwright tests
-      run: npx playwright test
+    - name: Run Playwright tests with forced artifacts
+      run: npx playwright test --video=on --screenshot=on
       
     - name: Check video files
       run: |
@@ -36,6 +36,14 @@ jobs:
           echo "Video: $file"
         done
         echo "Total videos: $(find test-results -name "*.webm" | wc -l)"
+        
+    - name: Check screenshot files
+      run: |
+        echo "📸 Looking for screenshot files..."
+        find test-results -name "*.png" | while read file; do
+          echo "Screenshot: $file"
+        done | head -10
+        echo "Total screenshots: $(find test-results -name "*.png" | wc -l)"
         
     - name: Upload test results
       uses: actions/upload-artifact@v4
