@@ -208,14 +208,115 @@ export class ScreenshotHelper {
   }
 
   /**
+   * ✅ NEW: Enhanced waiting method to prevent blank screenshots
+   */
+  private async waitForPageContent(): Promise<void> {
+    try {
+      logger.debug('⏳ Waiting for page content to be ready...');
+      
+      // Wait for page to be stable
+      await this.page.waitForLoadState('networkidle');
+      await this.page.waitForTimeout(500); // Extra rendering time
+      
+      // Wait for specific elements to be visible
+      const contentSelectors = [
+        '.inventory_list',
+        '.login_container', 
+        '.cart_list',
+        '.checkout_info_container',
+        '[data-test="username"]',
+        '.inventory_container',
+        '#inventory_container',
+        '.shopping_cart_container',
+        '.checkout_info_container',
+        '.checkout_summary_container',
+        '.complete-header',
+        '.error-message-container',
+        '[data-test="error"]'
+      ];
+      
+      let foundVisibleElement = false;
+      
+      for (const selector of contentSelectors) {
+        try {
+          const element = this.page.locator(selector).first();
+          const isVisible = await element.isVisible({ timeout: 2000 }).catch(() => false);
+          
+          if (isVisible) {
+            logger.debug(`✅ Found visible element: ${selector}`);
+            await element.waitFor({ state: 'visible', timeout: 5000 });
+            foundVisibleElement = true;
+            break;
+          }
+        } catch (error) {
+          // Continue to next selector if this one fails
+          continue;
+        }
+      }
+      
+      // If no specific elements found, wait for any visible content
+      if (!foundVisibleElement) {
+        logger.debug('⏳ No specific elements found, waiting for any visible content...');
+        const body = this.page.locator('body');
+        await body.waitFor({ state: 'visible', timeout: 5000 });
+        
+        // Check if body has any visible children
+        const visibleChildren = await body.locator('*').filter({ hasText: /.+/ }).count();
+        if (visibleChildren === 0) {
+          logger.warn('⚠️ Page appears to have no visible content');
+        }
+      }
+      
+      logger.debug('✅ Page content is ready for screenshot');
+      
+    } catch (error) {
+      logger.warn(`⚠️ Page content waiting failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Don't throw - continue with screenshot anyway
+    }
+  }
+
+  /**
    * ✅ COMPATIBLE: Dual-mode screenshot taking for Local vs CI
    */
   async takeScreenshot(stepName: string): Promise<string> {
+    // ✅ CRITICAL: Wait for page content before taking screenshot
+    await this.waitForPageContent();
+    
     if (this.isCI) {
       return await this.takeScreenshotCI(stepName);
     } else {
       return await this.takeScreenshotLocal(stepName);
     }
+  }
+
+  /**
+   * ✅ NEW: Enhanced screenshot with guaranteed content waiting
+   */
+  async takeScreenshotWithWait(stepName: string): Promise<string> {
+    logger.info(`⏳ Taking screenshot with enhanced waiting: ${stepName}`);
+    
+    // Enhanced waiting with multiple strategies
+    await this.waitForPageContent();
+    
+    // Additional wait for animations/transitions
+    await this.page.waitForTimeout(300);
+    
+    // Final check for page stability
+    try {
+      await this.page.evaluate(() => {
+        return new Promise<void>((resolve) => {
+          if (document.readyState === 'complete') {
+            resolve();
+          } else {
+            window.addEventListener('load', () => resolve());
+          }
+        });
+      });
+    } catch (error) {
+      logger.debug('⚠️ Page load wait completed with timeout');
+    }
+    
+    return await this.takeScreenshot(stepName);
   }
 
   /**
@@ -274,8 +375,7 @@ export class ScreenshotHelper {
         path: filePath,
         fullPage: false, // Don't use fullPage in CI (causes issues)
         timeout: 10000,  // Shorter timeout for CI
-        type: 'jpeg',    // Smaller file size
-        quality: 80      // Good quality but smaller
+        animations: 'disabled'
       });
 
       // ✅ CRITICAL: CI-compatible attachment
@@ -283,7 +383,7 @@ export class ScreenshotHelper {
         try {
           await this.testInfo.attach(`Screenshot: ${stepName}`, {
             path: filePath,
-            contentType: 'image/jpeg'
+            contentType: 'image/png'
           });
         } catch (attachError) {
           logger.debug(`⚠️ Could not attach screenshot in CI: ${attachError}`);
@@ -351,7 +451,7 @@ export class ScreenshotHelper {
    */
   async takeMajorStepScreenshot(stepName: string): Promise<string> {
     logger.info(`🎯 Taking major step screenshot: ${stepName}`);
-    return await this.takeScreenshot(`MAJOR_${stepName}`);
+    return await this.takeScreenshotWithWait(`MAJOR_${stepName}`);
   }
 
   /**
@@ -360,7 +460,7 @@ export class ScreenshotHelper {
   async takeScreenshotConditional(stepName: string, condition: boolean): Promise<string | null> {
     if (condition) {
       logger.info(`✅ Condition met, taking screenshot: ${stepName}`);
-      return await this.takeScreenshot(`CONDITIONAL_${stepName}`);
+      return await this.takeScreenshotWithWait(`CONDITIONAL_${stepName}`);
     }
     logger.debug(`⏭️ Screenshot skipped (condition false): ${stepName}`);
     return null;
@@ -371,7 +471,7 @@ export class ScreenshotHelper {
    */
   async takeScreenshotBefore(actionName: string): Promise<string> {
     logger.debug(`⬅️ Taking screenshot before: ${actionName}`);
-    return await this.takeScreenshot(`BEFORE_${actionName}`);
+    return await this.takeScreenshotWithWait(`BEFORE_${actionName}`);
   }
 
   /**
@@ -379,7 +479,7 @@ export class ScreenshotHelper {
    */
   async takeScreenshotAfter(actionName: string): Promise<string> {
     logger.debug(`➡️ Taking screenshot after: ${actionName}`);
-    return await this.takeScreenshot(`AFTER_${actionName}`);
+    return await this.takeScreenshotWithWait(`AFTER_${actionName}`);
   }
 
   /**
@@ -433,7 +533,7 @@ export class ScreenshotHelper {
    */
   async takeFailureScreenshot(errorMessage: string): Promise<string> {
     logger.error(`💥 Taking failure screenshot: ${errorMessage}`);
-    return await this.takeScreenshot(`FAILURE_${this.sanitizeFilename(errorMessage.substring(0, 50))}`);
+    return await this.takeScreenshotWithWait(`FAILURE_${this.sanitizeFilename(errorMessage.substring(0, 50))}`);
   }
 
   /**

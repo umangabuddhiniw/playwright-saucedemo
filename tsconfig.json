@@ -22,14 +22,14 @@
     }
   },
   "include": [
-    "src/**/*", 
+    "src/**/*",
     "playwright.config.ts",
     "data/**/*"
   ],
   "exclude": [
-    "node_modules", 
-    "dist", 
-    "test-results", 
+    "node_modules",
+    "dist",
+    "test-results",
     "playwright-report",
     "blob-report",
     "screenshots",

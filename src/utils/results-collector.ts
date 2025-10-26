@@ -1,6 +1,7 @@
 // src/utils/results-collector.ts
 import { testRunner, TestResult } from './testRunner';
 import { logger } from './logger';
+import { reportGenerator } from './reportGenerator';
 
 export interface TestResultData {
   testFile: string;
@@ -39,21 +40,22 @@ class ResultsCollector {
       // Convert duration string to number for TestRunner
       const duration = parseInt(result.duration) || 0;
 
-      // Also add to TestRunner for report generation
-      const testRunnerResult: TestResult = {
+      // ✅ FIXED: Use SINGLE report generator instead of testRunner
+      const reportGeneratorResult = {
         testName: result.testName,
         username: originalUsername,
         status: result.status,
         duration: duration,
         timestamp: new Date(),
-        testFile: result.testFile || 'unknown',
         errorMessage: result.errorMessage,
         screenshots: Array.isArray(result.screenshots) ? result.screenshots : [],
-        browser: result.browser || 'unknown'
+        testId: `${result.testFile}-${result.testName}`,
+        browser: result.browser || 'unknown',
+        testFile: result.testFile || 'unknown'
       };
 
-      // Add to both collectors for compatibility
-      testRunner.addTestResult(testRunnerResult);
+      // Add to SINGLE report generator
+      reportGenerator.addResult(reportGeneratorResult);
 
       // Set defaults for optional fields
       const processedResult: TestResultData = {
@@ -72,7 +74,7 @@ class ResultsCollector {
       // Add to local collection
       this.results.push(processedResult);
       
-      console.log('✅ Test result added to both collectors:', {
+      console.log('✅ Test result added to collectors:', {
         testName: processedResult.testName,
         username: processedResult.username,
         status: processedResult.status,
@@ -169,7 +171,6 @@ class ResultsCollector {
     const health = {
       isWorking: true,
       totalResults: this.results.length,
-      testRunnerResults: testRunner.getResults().length,
       lastUpdated: new Date().toISOString(),
       hasRecentActivity: this.results.length > 0
     };
@@ -191,7 +192,7 @@ class ResultsCollector {
   }
 }
 
-// ✅ Static methods for TestRunner integration
+// ✅ Static methods for ReportGenerator integration
 export class ResultsCollectorStatic {
   static collectTestResult(
     testName: string,
@@ -205,7 +206,7 @@ export class ResultsCollectorStatic {
       browser?: string;
     } = {}
   ): void {
-    const result: TestResult = {
+    const result = {
       testName,
       username,
       status,
@@ -214,10 +215,12 @@ export class ResultsCollectorStatic {
       testFile,
       errorMessage: options.errorMessage,
       screenshots: options.screenshots || [],
-      browser: options.browser
+      browser: options.browser,
+      testId: `${testFile}-${testName}`
     };
 
-    testRunner.addTestResult(result);
+    // ✅ FIXED: Use SINGLE report generator
+    reportGenerator.addResult(result);
     
     logger.info('Test result collected via static method', {
       testName,
@@ -232,18 +235,26 @@ export class ResultsCollectorStatic {
 
   static generateReports(): { htmlReportPath: string; jsonReportPath: string } {
     logger.info('Generating test reports via ResultsCollector');
-    const reports = testRunner.generateAllReports();
+    
+    // ✅ FIXED: Use SINGLE report generator
+    const reports = reportGenerator.generateComprehensiveReport();
     
     console.log('📊 Reports generated via ResultsCollector:', {
-      htmlReport: reports.htmlReportPath,
-      jsonReport: reports.jsonReportPath
+      htmlReport: reports.htmlPath,
+      jsonReport: reports.jsonPath
     });
     
-    return reports;
+    return {
+      htmlReportPath: reports.htmlPath,
+      jsonReportPath: reports.jsonPath
+    };
   }
 
   static clearPreviousResults(): void {
+    // ✅ FIXED: Clear both systems
     testRunner.clearResults();
+    reportGenerator.clearResults();
+    
     logger.info('Previous test results cleared via ResultsCollector');
     
     console.log('🧹 Previous results cleared via ResultsCollector static method');
@@ -276,31 +287,6 @@ export class ResultsCollectorStatic {
       }
     };
   }
-
-  // ✅ Static method to verify username preservation
-  static verifyUsernamePreservation(): { preserved: boolean; issues: string[] } {
-    const issues: string[] = [];
-    const testRunnerResults = testRunner.getResults();
-    const localResults = resultsCollector.getAllResults();
-    
-    // Check for username mismatches between TestRunner and local collector
-    testRunnerResults.forEach(trResult => {
-      const localMatch = localResults.find(lr => lr.testName === trResult.testName);
-      if (localMatch && localMatch.username !== trResult.username) {
-        issues.push(`Username mismatch for test "${trResult.testName}": TestRunner="${trResult.username}", Local="${localMatch.username}"`);
-      }
-    });
-
-    const preserved = issues.length === 0;
-    
-    if (!preserved) {
-      console.warn('⚠️ Username preservation issues detected:', issues);
-    } else {
-      console.log('✅ All usernames properly preserved across collectors');
-    }
-    
-    return { preserved, issues };
-  }
 }
 
 // ✅ Create a single global instance for backward compatibility
@@ -312,7 +298,6 @@ export const generateReports = ResultsCollectorStatic.generateReports;
 export const clearPreviousResults = ResultsCollectorStatic.clearPreviousResults;
 export const getTestRunnerResults = ResultsCollectorStatic.getTestRunnerResults;
 export const getCombinedStats = ResultsCollectorStatic.getCombinedStats;
-export const verifyUsernamePreservation = ResultsCollectorStatic.verifyUsernamePreservation;
 
 // ✅ Export the instance methods for backward compatibility
 export { ResultsCollector };
