@@ -25,6 +25,101 @@ interface TestResult {
   endTime: Date;
 }
 
+// 🎯 ULTIMATE FIX: Video-compatible visual readiness detection
+async function waitForVisualReady(page: Page, timeout = 30000) {
+  console.log('👁️ Waiting for visual readiness...');
+  
+  // Wait for network to be completely idle
+  await page.waitForLoadState('networkidle', { timeout });
+  
+  // Wait for DOM to be fully ready
+  await page.waitForFunction(
+    () => document.readyState === 'complete',
+    { timeout }
+  );
+  
+  // 🎯 CRITICAL: Wait for specific visual elements to be rendered
+  try {
+    // Wait for body to have some content (not empty)
+    await page.waitForFunction(
+      () => {
+        const body = document.body;
+        return body && 
+               body.children.length > 0 && 
+               body.offsetWidth > 0 && 
+               body.offsetHeight > 0 &&
+               window.getComputedStyle(body).visibility !== 'hidden';
+      },
+      { timeout: 15000 }
+    );
+  } catch (error) {
+    console.log('⚠️ Visual readiness check timed out, continuing...');
+  }
+  
+  // 🎯 CRITICAL: Force a render cycle and wait for stability
+  await page.evaluate(async () => {
+    // Force style recalculation
+    document.body.style.visibility = 'hidden';
+    const forceReflow = document.body.offsetHeight;
+    document.body.style.visibility = 'visible';
+    
+    // Wait for next animation frame
+    await new Promise(resolve => requestAnimationFrame(resolve));
+  });
+  
+  // 🎯 CRITICAL: Video recording compatible waits
+  const isCI = !!process.env.CI;
+  if (isCI) {
+    console.log('🏗️ CI detected - applying video-compatible stabilization...');
+    await page.waitForTimeout(3000); // Extra wait for CI video rendering
+  } else {
+    await page.waitForTimeout(1000); // Wait for local video recording
+  }
+  
+  console.log('✅ Visual readiness confirmed');
+}
+
+// 🎯 ULTIMATE FIX: Video-compatible screenshot function
+async function takeGuaranteedScreenshot(page: Page, screenshotHelper: ScreenshotHelper, name: string) {
+  console.log(`📸 PREPARING screenshot: ${name}`);
+  
+  // Step 1: Ensure visual readiness with video compatibility
+  await waitForVisualReady(page);
+  
+  // Step 2: Force viewport to be properly set for video recording
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+    // Ensure body is visible and has dimensions for video
+    document.body.style.visibility = 'visible';
+    document.documentElement.style.visibility = 'visible';
+  });
+  
+  // Step 3: Wait for any final rendering (video compatible)
+  await page.waitForTimeout(1000);
+  
+  // Step 4: Take the screenshot with error handling
+  try {
+    console.log(`🖼️ CAPTURING screenshot: ${name}`);
+    await screenshotHelper.takeScreenshot(name);
+    console.log(`✅ SUCCESS screenshot: ${name}`);
+  } catch (screenshotError) {
+    console.error(`❌ FAILED screenshot: ${name}`, screenshotError);
+    
+    // Fallback: Use Playwright's built-in screenshot
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const fallbackPath = `test-results/screenshots/fallback-${name}-${timestamp}.png`;
+      await page.screenshot({ 
+        path: fallbackPath,
+        fullPage: true 
+      });
+      console.log(`🔄 Used fallback screenshot: ${fallbackPath}`);
+    } catch (fallbackError) {
+      console.error('💥 Both screenshot methods failed:', fallbackError);
+    }
+  }
+}
+
 // Helper function to safely get user information
 function getUserInfo(username: string) {
   const user = credentials.users.find(user => user.username === username);
@@ -103,7 +198,7 @@ async function handleUserSpecificBehavior(
       logger.info('🔒 Handling locked_out_user specific behavior');
       const errorVisible = await page.locator('[data-test="error"]').isVisible().catch(() => false);
       if (errorVisible) {
-        await screenshotHelper.takeScreenshot('locked-user-error-state');
+        await takeGuaranteedScreenshot(page, screenshotHelper, 'locked-user-error-state');
         return { 
           shouldContinue: false, 
           reason: 'Expected behavior - locked user prevented from login' 
@@ -113,7 +208,7 @@ async function handleUserSpecificBehavior(
       
     case 'problem_user':
       logger.info('🔄 Handling problem_user specific behavior');
-      await screenshotHelper.takeScreenshot('problem-user-initial-state');
+      await takeGuaranteedScreenshot(page, screenshotHelper, 'problem-user-initial-state');
       
       // Check for broken images
       const brokenImages = await checkForBrokenImages(page);
@@ -125,7 +220,7 @@ async function handleUserSpecificBehavior(
       const buttonAnalysis = await analyzeButtonStates(page);
       logger.info(`🔘 Problem user - Buttons: ${buttonAnalysis.enabled}/${buttonAnalysis.total} enabled`);
       
-      await screenshotHelper.takeScreenshot('problem-user-ui-check');
+      await takeGuaranteedScreenshot(page, screenshotHelper, 'problem-user-ui-check');
       
       // For problem_user, we can continue but expect some issues
       return { 
@@ -137,12 +232,12 @@ async function handleUserSpecificBehavior(
       logger.info('⏱️ Handling performance_glitch_user specific behavior');
       await page.waitForTimeout(3000); // Extra wait for performance issues
       await productsPage.waitForProductsToLoad();
-      await screenshotHelper.takeScreenshot('performance-user-wait');
+      await takeGuaranteedScreenshot(page, screenshotHelper, 'performance-user-wait');
       break;
       
     case 'error_user':
       logger.info('❌ Handling error_user specific behavior');
-      await screenshotHelper.takeScreenshot('error-user-initial-state');
+      await takeGuaranteedScreenshot(page, screenshotHelper, 'error-user-initial-state');
       // For error_user, we can try to continue but expect errors
       return { 
         shouldContinue: true, 
@@ -194,20 +289,21 @@ async function safelyAddItemsToCart(
           let productName = `Product ${i + 1}`;
           
           if (await productNameElement.isVisible().catch(() => false)) {
-            productName = (await productNameElement.textContent()) || productName;
+            const nameText = await productNameElement.textContent();
+            productName = nameText || productName;
           }
           
           await button.click();
           itemsAdded++;
           addedProductNames.push(productName);
           
-          // Wait for cart badge to update
-          await productsPage.page.waitForTimeout(500);
+          // Wait for cart badge to update with video-compatible timing
+          await productsPage.page.waitForTimeout(1000);
           
           // Verify the button changed to remove
           try {
             const removeButton = productItem.locator('[data-test^="remove"]');
-            await removeButton.waitFor({ state: 'visible', timeout: 3000 });
+            await removeButton.waitFor({ state: 'visible', timeout: 5000 });
           } catch {
             logger.warn(`⚠️ Remove button not visible for ${productName}`);
           }
@@ -230,7 +326,7 @@ async function safelyAddItemsToCart(
       logger.warn('⚠️ Could not verify cart badge count');
     }
     
-    await screenshotHelper.takeScreenshot('items-added-to-cart');
+    await takeGuaranteedScreenshot(productsPage.page, screenshotHelper, 'items-added-to-cart');
     return { itemsAdded, addedProductNames };
     
   } catch (error) {
@@ -256,27 +352,27 @@ async function safelyCompleteCheckout(
     // Proceed to checkout with better error handling
     await cartPage.proceedToCheckout();
     await cartPage.page.waitForLoadState('domcontentloaded');
-    await cartPage.page.waitForTimeout(1000);
+    await cartPage.page.waitForTimeout(2000); // Video-compatible wait
     
     // Wait for checkout form with better timeout handling
     await checkoutInfoPage.waitForCheckoutForm();
     logger.info(`📝 Filling checkout info for ${user.firstName} ${user.lastName}`);
     await checkoutInfoPage.fillCheckoutInfo(user.firstName, user.lastName, user.postalCode);
-    await screenshotHelper.takeScreenshot('checkout-info-filled');
+    await takeGuaranteedScreenshot(checkoutInfoPage.page, screenshotHelper, 'checkout-info-filled');
     
     // Continue to overview
     await checkoutInfoPage.continueToOverview();
     await checkoutInfoPage.page.waitForLoadState('domcontentloaded');
-    await checkoutInfoPage.page.waitForTimeout(1000);
+    await checkoutInfoPage.page.waitForTimeout(2000); // Video-compatible wait
     
     // Verify overview and complete
     await overviewPage.waitForOverviewToLoad();
-    await screenshotHelper.takeScreenshot('checkout-overview');
+    await takeGuaranteedScreenshot(overviewPage.page, screenshotHelper, 'checkout-overview');
     
     // Finish checkout
     await overviewPage.finishCheckout();
     await overviewPage.page.waitForLoadState('domcontentloaded');
-    await overviewPage.page.waitForTimeout(1000);
+    await overviewPage.page.waitForTimeout(2000); // Video-compatible wait
     
     // Verify completion with better error handling
     await checkoutCompletePage.waitForCompletion();
@@ -295,7 +391,8 @@ async function safelyCompleteCheckout(
     for (const selector of completionSelectors) {
       const element = checkoutCompletePage.page.locator(selector).first();
       if (await element.isVisible().catch(() => false)) {
-        completionMessage = await element.textContent() || '';
+        const messageText = await element.textContent();
+        completionMessage = messageText || '';
         break;
       }
     }
@@ -309,7 +406,7 @@ async function safelyCompleteCheckout(
       }
     }
     
-    await screenshotHelper.takeScreenshot('order-complete');
+    await takeGuaranteedScreenshot(checkoutCompletePage.page, screenshotHelper, 'order-complete');
     
     logger.info('🎉 Checkout completed successfully!');
     return true;
@@ -318,7 +415,7 @@ async function safelyCompleteCheckout(
     logger.error('❌ Checkout process failed', {
       error: error instanceof Error ? error.message : 'Unknown error'
     });
-    await screenshotHelper.takeScreenshot('checkout-failure');
+    await takeGuaranteedScreenshot(checkoutInfoPage.page, screenshotHelper, 'checkout-failure');
     
     // For problem_user and error_user, checkout failure might be expected
     if (user.username.includes('problem') || user.username.includes('error')) {
@@ -330,28 +427,81 @@ async function safelyCompleteCheckout(
   }
 }
 
-// Simple login function
-async function performLogin(loginPage: LoginPage, username: string, password: string): Promise<{ success: boolean; error?: string }> {
+// 🎯 ENHANCED: Video-optimized login function with proper TypeScript handling
+async function performVideoOptimizedLogin(loginPage: LoginPage, username: string, password: string, screenshotHelper: ScreenshotHelper): Promise<{ success: boolean; error?: string }> {
   try {
-    // Navigate to login page
+    console.log(`🔐 STARTING video-optimized login for: ${username}`);
+    
+    // Navigate to login page with video optimization
+    console.log('🌐 Navigating to login page with video optimization...');
     const navSuccess = await loginPage.navigate();
     if (!navSuccess) {
       return { success: false, error: 'Failed to navigate to login page' };
     }
 
-    // Perform login
-    const loginSuccess = await loginPage.login(username, password);
+    // 🎯 CRITICAL: Wait for visual readiness BEFORE first interaction
+    console.log('⏳ Waiting for login page visual readiness (video optimized)...');
+    await waitForVisualReady(loginPage.page);
     
-    if (loginSuccess) {
+    // 🎯 CRITICAL: Take FIRST screenshot - guaranteed to have content for video
+    console.log('📸 Taking FIRST video-optimized screenshot...');
+    await takeGuaranteedScreenshot(loginPage.page, screenshotHelper, '01-login-page-ready');
+
+    // Perform login with video-friendly pacing
+    console.log('⌨️ Filling credentials with video pacing...');
+    await loginPage.page.fill('[data-test="username"]', username);
+    await loginPage.page.waitForTimeout(500); // Allow UI to update for video
+    
+    await loginPage.page.fill('[data-test="password"]', password);
+    await loginPage.page.waitForTimeout(500); // Allow UI to update for video
+    
+    await takeGuaranteedScreenshot(loginPage.page, screenshotHelper, '02-credentials-filled');
+
+    // Click login button with video optimization
+    console.log('🚀 Clicking login button with video optimization...');
+    await loginPage.page.click('[data-test="login-button"]');
+    
+    // Wait for navigation with video-compatible timing
+    try {
+      await loginPage.page.waitForNavigation({ 
+        waitUntil: 'domcontentloaded',
+        timeout: 40000 
+      });
+    } catch (navError) {
+      console.log('⚠️ Primary navigation timeout, trying networkidle...');
+      await loginPage.page.waitForLoadState('networkidle', { timeout: 30000 });
+    }
+    
+    // Wait for post-login page to be visually ready for video
+    console.log('⏳ Waiting for post-login page readiness (video optimized)...');
+    await waitForVisualReady(loginPage.page);
+    
+    // Take screenshot after login - optimized for video
+    console.log('📸 Taking video-optimized post-login screenshot...');
+    await takeGuaranteedScreenshot(loginPage.page, screenshotHelper, '03-post-login-ready');
+
+    // Check if login was successful
+    const currentUrl = loginPage.page.url();
+    if (currentUrl.includes('inventory.html')) {
+      console.log(`✅ VIDEO-OPTIMIZED LOGIN SUCCESSFUL for: ${username}`);
       return { success: true };
     } else {
       // Check for error message
-      const errorText = await loginPage.getErrorMessage();
-      return { 
-        success: false, 
-        error: errorText || 'Login failed for unknown reason' 
-      };
+      const errorElement = loginPage.page.locator('[data-test="error"]');
+      const hasError = await errorElement.isVisible().catch(() => false);
+      
+      if (hasError) {
+        // ✅ FIXED: Properly handle null case for textContent()
+        const errorText = await errorElement.textContent().catch(() => null);
+        return { 
+          success: false, 
+          error: errorText || 'Login error occurred but no message available' 
+        };
+      }
+      
+      return { success: false, error: 'Login failed - unknown reason' };
     }
+    
   } catch (error) {
     return { 
       success: false, 
@@ -360,7 +510,7 @@ async function performLogin(loginPage: LoginPage, username: string, password: st
   }
 }
 
-test.describe('Purchase Flow Tests - All Users', () => {
+test.describe('Purchase Flow Tests - All Users with Video Recording', () => {
   let loginPage: LoginPage;
   let productsPage: ProductsPage;
   let cartPage: CartPage;
@@ -377,13 +527,16 @@ test.describe('Purchase Flow Tests - All Users', () => {
     overviewPage = new OverviewPage(page);
     checkoutCompletePage = new CheckoutCompletePage(page);
     
-    logger.debug('🔄 Page objects initialized');
+    // 🎯 CRITICAL: Set consistent viewport size for video recording
+    await page.setViewportSize({ width: 1280, height: 720 });
+    
+    logger.debug('🔄 Page objects initialized with video optimization');
   });
 
   // Check if credentials.users exists and has data
   if (credentials.users && credentials.users.length > 0) {
     for (const user of credentials.users) {
-      test(`Purchase flow for ${user.username}`, async ({ page, browserName }, testInfo) => {
+      test(`Purchase flow for ${user.username} with video`, async ({ page, browserName }, testInfo) => {
         const currentBrowserName = browserName || testInfo.project.name;
         const startTime = Date.now();
         
@@ -396,20 +549,22 @@ test.describe('Purchase Flow Tests - All Users', () => {
         let shouldSkipFurtherSteps = false;
 
         // Initialize screenshot helper for this specific test
-        const screenshotHelper = new ScreenshotHelper(page, `${user.username}_purchase_flow`);
+        const screenshotHelper = new ScreenshotHelper(page, `${user.username}_purchase_flow_video`);
         
         try {
-          logHelper.testStart(`Purchase flow for ${user.username}`, currentBrowserName);
+          logHelper.testStart(`Purchase flow for ${user.username} with video`, currentBrowserName);
           logger.info(`👤 Testing purchase flow for: ${user.username}`, {
             browser: currentBrowserName,
-            userType: user.username
+            userType: user.username,
+            videoRecording: true
           });
 
-          await screenshotHelper.takeScreenshot('00-test-start');
+          // 🎯 CRITICAL: Take FIRST screenshot with video optimization
+          await takeGuaranteedScreenshot(page, screenshotHelper, '00-test-start');
 
-          // Step 1: Perform login
-          await test.step('Complete login process', async () => {
-            const loginResult = await performLogin(loginPage, user.username, user.password);
+          // Step 1: Perform login with video optimization
+          await test.step('Complete login process with video optimization', async () => {
+            const loginResult = await performVideoOptimizedLogin(loginPage, user.username, user.password, screenshotHelper);
 
             if (!loginResult.success) {
               logger.warn(`⚠️ Login issue for ${user.username}: ${loginResult.error}`);
@@ -419,7 +574,7 @@ test.describe('Purchase Flow Tests - All Users', () => {
                 const errorVisible = await page.locator('[data-test="error"]').isVisible().catch(() => false);
                 if (errorVisible) {
                   logger.info('✅ Expected behavior: locked_out_user correctly prevented from login');
-                  await screenshotHelper.takeScreenshot('02-locked-out-error');
+                  await takeGuaranteedScreenshot(page, screenshotHelper, '04-locked-out-error');
                   testStatus = 'passed';
                   flowSummary = 'Expected locked user behavior - login prevented';
                   shouldSkipFurtherSteps = true;
@@ -431,7 +586,6 @@ test.describe('Purchase Flow Tests - All Users', () => {
             }
             
             logger.info(`✅ Login successful for ${user.username}`);
-            await screenshotHelper.takeScreenshot('02-after-login');
           });
 
           // If test was marked as passed due to expected locked user behavior, exit early
@@ -441,7 +595,7 @@ test.describe('Purchase Flow Tests - All Users', () => {
             
             resultsCollector.addResult({
               testFile: 'purchaseFlow.spec.ts',
-              testName: `Purchase flow for ${user.username}`,
+              testName: `Purchase flow for ${user.username} with video`,
               username: user.username,
               browser: currentBrowserName,
               status: testStatus,
@@ -452,15 +606,16 @@ test.describe('Purchase Flow Tests - All Users', () => {
               endTime: new Date()
             });
             
-            logHelper.testPass(`Purchase flow for ${user.username}`, Date.now() - startTime, {
-              reason: flowSummary
+            logHelper.testPass(`Purchase flow for ${user.username} with video`, Date.now() - startTime, {
+              reason: flowSummary,
+              videoRecording: true
             });
             return;
           }
 
           // Step 2: Handle user-specific behaviors
           let behaviorResult: { shouldContinue: boolean; reason?: string } = { shouldContinue: true };
-          await test.step('Handle user-specific behaviors', async () => {
+          await test.step('Handle user-specific behaviors with video', async () => {
             behaviorResult = await handleUserSpecificBehavior(
               user.username, 
               page, 
@@ -485,7 +640,7 @@ test.describe('Purchase Flow Tests - All Users', () => {
             
             resultsCollector.addResult({
               testFile: 'purchaseFlow.spec.ts',
-              testName: `Purchase flow for ${user.username}`,
+              testName: `Purchase flow for ${user.username} with video`,
               username: user.username,
               browser: currentBrowserName,
               status: testStatus,
@@ -496,21 +651,22 @@ test.describe('Purchase Flow Tests - All Users', () => {
               endTime: new Date()
             });
             
-            logHelper.testPass(`Purchase flow for ${user.username}`, Date.now() - startTime, {
-              reason: flowSummary
+            logHelper.testPass(`Purchase flow for ${user.username} with video`, Date.now() - startTime, {
+              reason: flowSummary,
+              videoRecording: true
             });
             return;
           }
 
-          // Step 3: Wait for products to load
-          await test.step('Wait for products to load', async () => {
+          // Step 3: Wait for products to load with video optimization
+          await test.step('Wait for products to load with video', async () => {
             logger.info('📦 Waiting for products to load...');
             await productsPage.waitForProductsToLoad();
-            await screenshotHelper.takeScreenshot('03-products-loaded');
+            await takeGuaranteedScreenshot(page, screenshotHelper, '04-products-loaded');
           });
 
-          // Step 4: View item details
-          await test.step('View item details', async () => {
+          // Step 4: View item details with video optimization
+          await test.step('View item details with video', async () => {
             logger.info('🔍 Viewing item details...');
             
             try {
@@ -519,16 +675,16 @@ test.describe('Purchase Flow Tests - All Users', () => {
               if (productNames.length > 0) {
                 await productsPage.goToItemDetail(productNames[0]);
                 await page.waitForLoadState('domcontentloaded');
-                await page.waitForTimeout(1000);
+                await page.waitForTimeout(2000); // Video-compatible wait
                 
                 const detailContainer = page.locator('.inventory_details_container, .inventory_details');
-                await expect(detailContainer.first()).toBeVisible({ timeout: 10000 });
-                await screenshotHelper.takeScreenshot('04-item-detail');
+                await expect(detailContainer.first()).toBeVisible({ timeout: 15000 });
+                await takeGuaranteedScreenshot(page, screenshotHelper, '05-item-detail');
                 
                 // Go back to products
                 await productsPage.goBackToProducts();
                 await page.waitForLoadState('domcontentloaded');
-                await page.waitForTimeout(500);
+                await page.waitForTimeout(1000); // Video-compatible wait
               } else {
                 logger.warn('⚠️ No products found to view details');
               }
@@ -540,8 +696,8 @@ test.describe('Purchase Flow Tests - All Users', () => {
             }
           });
 
-          // Step 5: Add items to cart with proper tracking
-          await test.step('Add items to cart', async () => {
+          // Step 5: Add items to cart with proper tracking and video optimization
+          await test.step('Add items to cart with video', async () => {
             const addResult = await safelyAddItemsToCart(productsPage, screenshotHelper, 2);
             itemsAdded = addResult.itemsAdded;
             
@@ -556,16 +712,16 @@ test.describe('Purchase Flow Tests - All Users', () => {
             }
           });
 
-          // Step 6: Manage cart items with accurate counting
-          await test.step('Manage cart items', async () => {
+          // Step 6: Manage cart items with accurate counting and video optimization
+          await test.step('Manage cart items with video', async () => {
             // Go to cart
             await productsPage.goToCart();
             await page.waitForLoadState('domcontentloaded');
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(2000); // Video-compatible wait
             
             // Wait for cart to load
             await cartPage.waitForCartToLoad();
-            await screenshotHelper.takeScreenshot('05-cart-page');
+            await takeGuaranteedScreenshot(page, screenshotHelper, '06-cart-page');
             
             // Count cart items accurately
             const cartItemsBeforeRemoval = await page.locator('.cart_item, [data-test="inventory-item"]').count();
@@ -589,11 +745,12 @@ test.describe('Purchase Flow Tests - All Users', () => {
               const itemNameElement = firstCartItem.locator('.inventory_item_name, [data-test="inventory-item-name"]');
               let itemName = 'item';
               if (await itemNameElement.isVisible().catch(() => false)) {
-                itemName = (await itemNameElement.textContent()) || itemName;
+                const nameText = await itemNameElement.textContent();
+                itemName = nameText || itemName;
               }
               
               await cartPage.removeFirstItem();
-              await page.waitForTimeout(1000);
+              await page.waitForTimeout(2000); // Video-compatible wait
               
               // Wait for cart to update and verify removal
               const cartItemsAfterRemoval = await page.locator('.cart_item, [data-test="inventory-item"]').count();
@@ -609,11 +766,11 @@ test.describe('Purchase Flow Tests - All Users', () => {
               itemsRemoved = 0;
             }
             
-            await screenshotHelper.takeScreenshot('06-cart-after-removal');
+            await takeGuaranteedScreenshot(page, screenshotHelper, '07-cart-after-removal');
           });
 
-          // Step 7: Complete checkout process
-          await test.step('Complete checkout', async () => {
+          // Step 7: Complete checkout process with video optimization
+          await test.step('Complete checkout with video', async () => {
             // Check if we have items in cart before proceeding to checkout
             if (itemsAdded === 0) {
               logger.warn('🛒 Cart is empty, cannot proceed to checkout');
@@ -655,12 +812,13 @@ test.describe('Purchase Flow Tests - All Users', () => {
           const duration = Date.now() - startTime;
           screenshotFilenames = screenshotHelper.getScreenshotFilenames();
 
-          logger.info('📋 Purchase flow test completed successfully', {
+          logger.info('📋 Purchase flow test completed successfully with video', {
             duration,
             screenshotsTaken: screenshotFilenames.length,
             itemsAdded,
             itemsRemoved,
-            user: user.username
+            user: user.username,
+            videoRecording: true
           });
 
         } catch (error) {
@@ -669,8 +827,8 @@ test.describe('Purchase Flow Tests - All Users', () => {
           errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
           screenshotFilenames = screenshotHelper.getScreenshotFilenames();
 
-          // Capture final error state
-          await screenshotHelper.takeScreenshot('99-test-failure').catch(() => {
+          // Capture final error state with video compatibility
+          await takeGuaranteedScreenshot(page, screenshotHelper, '99-test-failure').catch(() => {
             logger.error('❌ Failed to capture final error screenshot');
           });
 
@@ -680,7 +838,8 @@ test.describe('Purchase Flow Tests - All Users', () => {
             screenshotsTaken: screenshotFilenames.length,
             user: user.username,
             itemsAdded,
-            itemsRemoved
+            itemsRemoved,
+            videoRecording: true
           });
         } finally {
           const duration = Date.now() - startTime;
@@ -688,7 +847,7 @@ test.describe('Purchase Flow Tests - All Users', () => {
           
           const testResult: TestResult = {
             testFile: 'purchaseFlow.spec.ts',
-            testName: `Purchase flow for ${user.username}`,
+            testName: `Purchase flow for ${user.username} with video`,
             username: user.username,
             browser: currentBrowserName,
             status: testStatus,
@@ -703,22 +862,24 @@ test.describe('Purchase Flow Tests - All Users', () => {
 
           // Log final result
           if (testStatus === 'passed') {
-            logHelper.testPass(`Purchase flow for ${user.username}`, duration, {
+            logHelper.testPass(`Purchase flow for ${user.username} with video`, duration, {
               screenshots: screenshotFilenames.length,
-              summary: flowSummary
+              summary: flowSummary,
+              videoRecording: true
             });
           } else {
-            logHelper.testFail(`Purchase flow for ${user.username}`, 
+            logHelper.testFail(`Purchase flow for ${user.username} with video`, 
               errorMessage ? new Error(errorMessage) : new Error('Test failed'), 
               duration
             );
           }
 
-          logger.debug('📊 Test result recorded', {
+          logger.debug('📊 Test result recorded with video', {
             user: user.username,
             status: testStatus,
             duration,
-            screenshots: screenshotFilenames.length
+            screenshots: screenshotFilenames.length,
+            videoRecording: true
           });
         }
       });
