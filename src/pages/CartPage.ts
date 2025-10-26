@@ -1,6 +1,5 @@
 import { Page, Locator } from '@playwright/test';
 import { logger, logHelper } from '../utils/logger';
-import { CustomWait } from '../utils/customWait';
 
 export interface CartItem {
   name: string;
@@ -9,13 +8,18 @@ export interface CartItem {
   index?: number;
 }
 
+// Global tracking for items operations
+let globalItemsAdded = 0;
+let globalItemsRemoved = 0;
+
 export class CartPage {
   readonly page: Page;
-  private customWait: CustomWait;
+  private itemsAdded: number = 0;
+  private itemsRemoved: number = 0;
 
   constructor(page: Page) {
     this.page = page;
-    this.customWait = new CustomWait(page);
+    this.resetItemCounts(); // Initialize counts
   }
 
   // Locators with proper error handling
@@ -56,17 +60,78 @@ export class CartPage {
   }
 
   /**
+   * ITEMS COUNT TRACKING METHODS - NEW ADDITION
+   */
+  
+  /**
+   * Reset item counts for new test
+   */
+  resetItemCounts(): void {
+    this.itemsAdded = 0;
+    this.itemsRemoved = 0;
+    globalItemsAdded = 0;
+    globalItemsRemoved = 0;
+    logger.debug('🔄 Item counts reset for new test');
+  }
+
+  /**
+   * Track item added to cart
+   */
+  trackItemAdded(itemName?: string): void {
+    this.itemsAdded++;
+    globalItemsAdded++;
+    logger.debug(`📥 Item added tracking: ${itemName || 'Unknown'} | Local: ${this.itemsAdded} | Global: ${globalItemsAdded}`);
+  }
+
+  /**
+   * Track item removed from cart
+   */
+  trackItemRemoved(itemName?: string): void {
+    this.itemsRemoved++;
+    globalItemsRemoved++;
+    logger.debug(`📤 Item removed tracking: ${itemName || 'Unknown'} | Local: ${this.itemsRemoved} | Global: ${globalItemsRemoved}`);
+  }
+
+  /**
+   * Get current items count summary
+   */
+  getItemsCountSummary(): { added: number; removed: number; net: number } {
+    const summary = {
+      added: this.itemsAdded,
+      removed: this.itemsRemoved,
+      net: this.itemsAdded - this.itemsRemoved
+    };
+    
+    logger.debug(`📊 Items count summary: Added ${summary.added}, Removed ${summary.removed}, Net ${summary.net}`);
+    return summary;
+  }
+
+  /**
+   * Get global items count summary
+   */
+  static getGlobalItemsCountSummary(): { added: number; removed: number; net: number } {
+    const summary = {
+      added: globalItemsAdded,
+      removed: globalItemsRemoved,
+      net: globalItemsAdded - globalItemsRemoved
+    };
+    
+    logger.debug(`🌍 Global items count: Added ${summary.added}, Removed ${summary.removed}, Net ${summary.net}`);
+    return summary;
+  }
+
+  /**
    * Wait for cart to load completely with comprehensive checks
    */
   async waitForCartToLoad(timeout: number = 15000): Promise<void> {
     try {
       logger.debug('🔄 Waiting for cart to load...');
       
-      // ✅ FIXED: Use instance method instead of static method
-      await this.customWait.waitForElementInstance('.cart_list', timeout);
+      // Wait for cart list to be visible
+      await this.page.waitForSelector('.cart_list', { timeout });
       
-      // ✅ FIXED: Use instance method instead of static method
-      await this.customWait.waitForNetworkIdleInstance(5000);
+      // Wait for network to be idle
+      await this.page.waitForLoadState('networkidle', { timeout: 5000 });
       
       // Additional check for cart items to be stable
       await this.waitForCondition(
@@ -137,8 +202,8 @@ export class CartPage {
             continue;
           }
           
-          // Parse price safely
-          const price = this.parsePrice(priceText);
+          // Use type-safe price parsing
+          const price = this.parsePriceSafely(priceText);
           if (price === null) {
             logger.warn(`⚠️ Could not parse price "${priceText}" for cart item ${i + 1}`);
             continue;
@@ -178,12 +243,29 @@ export class CartPage {
   }
 
   /**
-   * Safely parse price text to number
+   * Safely parse price text to number - Complete type safety
    */
-  private parsePrice(priceText: string): number | null {
+  private parsePriceSafely(priceText: string | null): number | null {
+    // Handle null case first - this eliminates the TypeScript error
+    if (priceText === null) {
+      return null;
+    }
+    
+    // Now TypeScript knows priceText is string, handle empty cases
+    const trimmedText = priceText.trim();
+    if (trimmedText === '') {
+      return null;
+    }
+    
     try {
       // Remove currency symbols and trim whitespace
-      const cleanPrice = priceText.replace(/[^\d.,]/g, '').trim();
+      const cleanPrice = trimmedText.replace(/[^\d.,]/g, '').trim();
+      
+      // Check if cleanPrice is empty after cleaning
+      if (cleanPrice === '') {
+        return null;
+      }
+      
       const price = parseFloat(cleanPrice);
       
       // Validate the parsed price
@@ -233,11 +315,14 @@ export class CartPage {
       
       const firstRemoveButton = this.removeButtons.first();
       
-      // Get item name before removal for logging
+      // Get item name before removal for logging and tracking - FIXED: Handle null case
       const itemName = await this.getItemName(0).catch(() => 'Unknown item');
       
-      // Use CustomWait instance for reliable clicking
+      // Use reliable clicking
       await this.clickWithRetry(firstRemoveButton);
+      
+      // Track the removal operation - FIXED: Convert null to undefined
+      this.trackItemRemoved(itemName || undefined);
       
       // Wait for cart to update with comprehensive verification
       const removalSuccessful = await this.waitForCondition(
@@ -255,6 +340,7 @@ export class CartPage {
         return true;
       } else {
         logger.error('❌ Cart count did not decrease after removal attempt');
+        // Even if count didn't decrease, we tracked the attempt
         return false;
       }
       
@@ -287,10 +373,16 @@ export class CartPage {
       logger.info(`🗑️ Removing item at index ${index} from cart`);
       
       const removeButton = this.removeButtons.nth(index);
-      const itemName = await this.getItemName(index).catch(() => `Item ${index + 1}`);
       
-      // Use CustomWait instance for reliable clicking
+      // Get item name before removal for logging and tracking - FIXED: Handle null case
+      const itemNameResult = await this.getItemName(index).catch(() => null);
+      const itemName = itemNameResult || `Item ${index + 1}`;
+      
+      // Use reliable clicking
       await this.clickWithRetry(removeButton);
+      
+      // Track the removal operation - FIXED: Convert null to undefined
+      this.trackItemRemoved(itemNameResult || undefined);
       
       // Wait for removal to take effect
       const removalSuccessful = await this.waitForCondition(
@@ -308,6 +400,7 @@ export class CartPage {
         return true;
       } else {
         logger.error(`❌ Failed to remove item at index ${index}`);
+        // Even if count didn't decrease, we tracked the attempt
         return false;
       }
       
@@ -337,6 +430,10 @@ export class CartPage {
       }
 
       logger.info(`🗑️ Removing item by name: "${itemName}" (found at index ${itemIndex})`);
+      
+      // Track the removal operation
+      this.trackItemRemoved(itemName);
+      
       return await this.removeItemByIndex(itemIndex);
       
     } catch (error) {
@@ -365,6 +462,10 @@ export class CartPage {
       }
 
       logger.info(`🗑️ Removing item by exact name: "${exactName}" (found at index ${itemIndex})`);
+      
+      // Track the removal operation
+      this.trackItemRemoved(exactName);
+      
       return await this.removeItemByIndex(itemIndex);
       
     } catch (error) {
@@ -382,7 +483,7 @@ export class CartPage {
     try {
       logger.info('💰 Proceeding to checkout...');
       
-      // Use CustomWait instance for reliable button interaction
+      // Use reliable button interaction
       await this.waitForElementToBeEnabled(this.checkoutButton);
       
       // Verify we have items in cart
@@ -393,10 +494,9 @@ export class CartPage {
       }
       
       await this.clickWithRetry(this.checkoutButton);
-      await this.customWait.waitForNetworkIdleInstance();
       
-      // ✅ FIXED: Use instance method instead of static method
-      await this.customWait.waitForURLToContain('checkout-step-one', 10000)
+      // Wait for navigation to checkout page
+      await this.page.waitForURL(/.*checkout-step-one.*/, { timeout: 10000 })
         .catch(() => logger.warn('⚠️ May not have navigated to exact checkout page'));
       
       logger.info('✅ Successfully proceeded to checkout');
@@ -417,13 +517,12 @@ export class CartPage {
     try {
       logger.info('🛍️ Continuing shopping...');
       
-      // Use CustomWait instance for reliable button interaction
+      // Use reliable button interaction
       await this.waitForElementToBeEnabled(this.continueShoppingButton);
       await this.clickWithRetry(this.continueShoppingButton);
-      await this.customWait.waitForNetworkIdleInstance();
       
-      // ✅ FIXED: Use instance method instead of static method
-      await this.customWait.waitForURLToContain('inventory', 10000)
+      // Wait for navigation back to inventory
+      await this.page.waitForURL(/.*inventory.*/, { timeout: 10000 })
         .catch(() => logger.warn('⚠️ May not have navigated back to exact products page'));
       
       logger.info('✅ Successfully continued shopping');
@@ -438,7 +537,7 @@ export class CartPage {
   }
 
   /**
-   * Wait for cart to be empty with timeout using CustomWait instance
+   * Wait for cart to be empty with timeout
    */
   async waitForCartToBeEmpty(timeout: number = 10000): Promise<boolean> {
     try {
@@ -500,7 +599,8 @@ export class CartPage {
         return null;
       }
       
-      return this.parsePrice(priceText);
+      // Use the correctly named method
+      return this.parsePriceSafely(priceText);
       
     } catch (error) {
       logger.error(`❌ Failed to get item price at index ${index}`, {
@@ -592,14 +692,20 @@ export class CartPage {
       
       // Remove items from last to first to avoid index shifting issues
       for (let i = initialCount - 1; i >= 0; i--) {
+        // FIXED: Handle null case properly
+        const itemNameResult = await this.getItemName(i).catch(() => null);
+        const itemName = itemNameResult || `Item ${i + 1}`;
+        
         const success = await this.removeItemByIndex(i);
         if (!success) {
           logger.error(`❌ Failed to remove item at index ${i}, stopping cart clearance`);
           return false;
         }
+        // Track each removal (already tracked in removeItemByIndex, but we log it here too)
+        logger.debug(`🗑️ Cleared item: ${itemName}`);
       }
       
-      // Verify cart is empty using CustomWait instance
+      // Verify cart is empty
       const clearanceSuccessful = await this.waitForCondition(
         async () => {
           const finalCount = await this.getCartItemsCount();
@@ -646,7 +752,7 @@ export class CartPage {
   }
 
   /**
-   * Wait for cart badge to reflect specific count using CustomWait instance
+   * Wait for cart badge to reflect specific count
    */
   async waitForCartBadgeCount(expectedCount: number, timeout: number = 10000): Promise<boolean> {
     try {
@@ -689,17 +795,20 @@ export class CartPage {
     subtotal: number;
     items: CartItem[];
     isEmpty: boolean;
+    operations: { added: number; removed: number; net: number }; // NEW: Added operations tracking
   }> {
     try {
       const items = await this.getCartItems();
       const subtotal = await this.calculateSubtotal();
       const itemCount = await this.getCartItemsCount();
+      const operations = this.getItemsCountSummary(); // NEW: Get operations count
       
       return {
         itemCount,
         subtotal,
         items,
-        isEmpty: itemCount === 0
+        isEmpty: itemCount === 0,
+        operations // NEW: Include operations in summary
       };
     } catch (error) {
       logger.error('❌ Failed to get cart summary', {
@@ -709,7 +818,8 @@ export class CartPage {
         itemCount: 0,
         subtotal: 0,
         items: [],
-        isEmpty: true
+        isEmpty: true,
+        operations: { added: 0, removed: 0, net: 0 } // NEW: Default operations
       };
     }
   }
@@ -721,6 +831,7 @@ export class CartPage {
     isValid: boolean;
     issues: string[];
     details: string;
+    operations: { added: number; removed: number; net: number }; // NEW: Added operations
   }> {
     const issues: string[] = [];
     
@@ -749,17 +860,21 @@ export class CartPage {
         issues.push(`Remove buttons (${removeButtonCount}) don't match item count (${actualCount})`);
       }
       
+      const operations = this.getItemsCountSummary(); // NEW: Get operations count
+      
       return {
         isValid: issues.length === 0,
         issues,
-        details: `Cart validation: ${actualCount} items, $${await this.calculateSubtotal()} subtotal`
+        details: `Cart validation: ${actualCount} items, $${await this.calculateSubtotal()} subtotal, Operations: +${operations.added}/-${operations.removed}`,
+        operations // NEW: Include operations
       };
       
     } catch (error) {
       return {
         isValid: false,
         issues: [`Cart validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
-        details: 'Cart validation failed'
+        details: 'Cart validation failed',
+        operations: { added: 0, removed: 0, net: 0 } // NEW: Default operations
       };
     }
   }
@@ -794,8 +909,8 @@ export class CartPage {
         return;
       } catch (error) {
         if (attempt === maxRetries) throw error;
-        // ✅ FIXED: Use instance method instead of static method
-        await this.customWait.artificialDelayInstance(500 * attempt);
+        // Use page.waitForTimeout for delays
+        await this.page.waitForTimeout(500 * attempt);
       }
     }
   }
@@ -815,8 +930,8 @@ export class CartPage {
       if (await condition()) {
         return;
       }
-      // ✅ FIXED: Use instance method instead of static method
-      await this.customWait.artificialDelayInstance(pollInterval);
+      // Use page.waitForTimeout for delays
+      await this.page.waitForTimeout(pollInterval);
     }
     
     throw new Error(`${description} not met within ${timeout}ms`);

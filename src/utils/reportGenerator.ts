@@ -73,26 +73,17 @@ export class ReportGenerator {
             return;
         }
 
-        const total = this.results.length;
-        const passed = this.results.filter(r => r.status === 'passed').length;
-        const failed = this.results.filter(r => r.status === 'failed').length;
-        const skipped = this.results.filter(r => r.status === 'skipped').length;
-        const successRate = total > 0 ? ((passed / total) * 100).toFixed(1) : '0';
-
-        console.log('\n' + '='.repeat(60));
+        const stats = this.calculateStatistics();
+        
+        console.log('\n' + '='.repeat(80));
         console.log('📋 TEST EXECUTION SUMMARY');
-        console.log('='.repeat(60));
-        console.log(`Total: ${total} | ✅ Passed: ${passed} | ❌ Failed: ${failed} | ⚠️ Skipped: ${skipped}`);
-        console.log(`Success Rate: ${successRate}%`);
+        console.log('='.repeat(80));
+        console.log(`Total: ${stats.total} | ✅ Passed: ${stats.passed} | ❌ Failed: ${stats.failed} | ⚠️ Skipped: ${stats.skipped}`);
+        console.log(`Success Rate: ${stats.successRate}%`);
         
         // Additional statistics
-        const totalScreenshots = this.getAvailableScreenshots().length;
-        const usedScreenshots = this.results.reduce((total, result) => 
-            total + this.getScreenshotsForTest(result).length, 0
-        );
-        
-        console.log(`Screenshots: ${usedScreenshots}/${totalScreenshots} used`);
-        console.log('='.repeat(60));
+        console.log(`Screenshots: ${stats.usedScreenshots}/${stats.totalScreenshots} used`);
+        console.log('='.repeat(80));
     }
 
     private findScreenshotDir(): string {
@@ -411,115 +402,115 @@ export class ReportGenerator {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SauceDemo Test Report</title>
+    <title>Custom Test Execution Report</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; background: white; box-shadow: 0 0 20px rgba(0,0,0,0.1); border-radius: 10px; overflow: hidden; }
-        .header { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); color: white; padding: 30px; text-align: center; }
-        .header h1 { font-size: 2.5em; margin-bottom: 10px; font-weight: 300; }
-        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 30px; background: #f8f9fa; }
-        .summary-card { background: white; padding: 25px; border-radius: 10px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .summary-card.total { border-top: 4px solid #3498db; }
-        .summary-card.passed { border-top: 4px solid #2ecc71; }
-        .summary-card.failed { border-top: 4px solid #e74c3c; }
-        .summary-card.skipped { border-top: 4px solid #f39c12; }
-        .summary-card .count { font-size: 2.5em; font-weight: bold; color: #2c3e50; }
-        .results-table { width: 100%; border-collapse: collapse; }
-        .results-table th { background: #34495e; color: white; padding: 15px; text-align: left; }
-        .results-table td { padding: 15px; border-bottom: 1px solid #ecf0f1; vertical-align: top; }
-        .results-table tr:hover { background: #f8f9fa; }
-        .test-file { font-family: 'Courier New', monospace; background: #e8f4fd; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; }
-        .user-badge { background: #e8f4fd; color: #2980b9; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; }
-        .status-passed { color: #27ae60; font-weight: bold; }
-        .status-failed { color: #e74c3c; font-weight: bold; }
-        .status-skipped { color: #f39c12; font-weight: bold; }
-        .screenshot-gallery { display: flex; gap: 8px; flex-wrap: wrap; }
-        .screenshot { width: 80px; height: 60px; object-fit: cover; border: 2px solid #ddd; border-radius: 6px; cursor: pointer; }
-        .screenshot:hover { border-color: #3498db; transform: scale(1.05); }
-        .no-screenshots { color: #7f8c8d; font-style: italic; }
-        .error-message { color: #e74c3c; font-size: 0.85em; background: #fdeded; padding: 8px; border-radius: 4px; margin-top: 5px; }
-        .modal { display: none; position: fixed; z-index: 1000; padding-top: 50px; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); }
-        .modal-content { margin: auto; display: block; width: 80%; max-width: 700px; border-radius: 8px; }
-        .close { position: absolute; top: 15px; right: 35px; color: #f1f1f1; font-size: 40px; font-weight: bold; cursor: pointer; }
-        .close:hover { color: #bbb; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 30px; text-align: center; }
+        .header h1 { color: #333; margin-bottom: 10px; font-size: 2.5em; }
+        .header p { color: #666; font-size: 1.1em; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .summary-card { background: white; padding: 25px; border-radius: 12px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.08); transition: transform 0.3s ease; }
+        .summary-card:hover { transform: translateY(-5px); }
+        .summary-card.total { border-top: 5px solid #3498db; }
+        .summary-card.passed { border-top: 5px solid #27ae60; }
+        .summary-card.failed { border-top: 5px solid #e74c3c; }
+        .summary-card.skipped { border-top: 5px solid #f39c12; }
+        .summary-card.rate { border-top: 5px solid #9b59b6; }
+        .summary-card h3 { color: #555; margin-bottom: 10px; font-size: 1em; text-transform: uppercase; letter-spacing: 1px; }
+        .summary-card .number { font-size: 2.2em; font-weight: bold; margin: 10px 0; }
+        .total .number { color: #3498db; }
+        .passed .number { color: #27ae60; }
+        .failed .number { color: #e74c3c; }
+        .skipped .number { color: #f39c12; }
+        .rate .number { color: #9b59b6; }
+        .test-results { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .test-results h2 { color: #333; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #eee; }
+        .test-card { border-left: 5px solid #ddd; margin-bottom: 20px; padding: 20px; background: #fafafa; border-radius: 8px; transition: all 0.3s ease; }
+        .test-card:hover { background: #f8f9fa; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .test-card.passed { border-left-color: #27ae60; background: #f0fff4; }
+        .test-card.failed { border-left-color: #e74c3c; background: #fff0f0; }
+        .test-card.skipped { border-left-color: #f39c12; background: #fffbf0; }
+        .test-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; }
+        .test-name { font-weight: bold; font-size: 1.2em; color: #333; flex: 1; }
+        .test-status { padding: 6px 12px; border-radius: 20px; color: white; font-size: 0.85em; font-weight: bold; }
+        .status-passed { background: #27ae60; }
+        .status-failed { background: #e74c3c; }
+        .status-skipped { background: #f39c12; }
+        .test-details { color: #666; font-size: 0.95em; }
+        .test-details p { margin: 5px 0; }
+        .screenshots { margin-top: 15px; }
+        .screenshot-list { list-style: none; margin-top: 8px; }
+        .screenshot-list li { background: #e9ecef; padding: 5px 10px; margin: 3px 0; border-radius: 4px; font-family: monospace; font-size: 0.85em; }
+        .error-message { background: #ffeaa7; padding: 12px; border-radius: 6px; margin-top: 10px; font-family: monospace; font-size: 0.9em; border-left: 4px solid #fdcb6e; }
+        .duration { color: #7f8c8d; font-size: 0.9em; }
+        .environment-info { background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3498db; }
+        @media (max-width: 768px) {
+            .test-header { flex-direction: column; align-items: flex-start; }
+            .test-status { margin-top: 10px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧪 SauceDemo Test Report</h1>
-            <p>Complete test execution results</p>
-            <p><strong>Generated on:</strong> ${new Date().toLocaleString()}</p>
+            <h1>🧪 Custom Test Execution Report</h1>
+            <p>Comprehensive test results generated on ${new Date().toISOString()}</p>
+            <div class="environment-info">
+                <strong>Environment:</strong> ${process.env.CI ? 'GitHub Actions' : 'Local Development'} | 
+                <strong>Node.js:</strong> ${process.version} | 
+                <strong>Platform:</strong> ${process.platform}
+            </div>
         </div>
         
-        <div class="summary">
-            <div class="summary-card total"><h3>Total Tests</h3><p class="count">${stats.total}</p></div>
-            <div class="summary-card passed"><h3>Passed</h3><p class="count">${stats.passed}</p></div>
-            <div class="summary-card failed"><h3>Failed</h3><p class="count">${stats.failed}</p></div>
-            <div class="summary-card skipped"><h3>Skipped</h3><p class="count">${stats.skipped}</p></div>
-        </div>
-
-        <div style="text-align: center; margin: 20px 0;">
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; display: inline-block;">
-                <strong>Success Rate:</strong> 
-                <span style="font-size: 1.5em; font-weight: bold; color: #27ae60; margin-left: 10px;">${stats.successRate}%</span>
+        <div class="summary-grid">
+            <div class="summary-card total">
+                <h3>Total Tests</h3>
+                <div class="number">${stats.total}</div>
+                <p>Executed Tests</p>
+            </div>
+            <div class="summary-card passed">
+                <h3>Passed</h3>
+                <div class="number">${stats.passed}</div>
+                <p>Successful Tests</p>
+            </div>
+            <div class="summary-card failed">
+                <h3>Failed</h3>
+                <div class="number">${stats.failed}</div>
+                <p>Failed Tests</p>
+            </div>
+            <div class="summary-card skipped">
+                <h3>Skipped</h3>
+                <div class="number">${stats.skipped}</div>
+                <p>Skipped Tests</p>
+            </div>
+            <div class="summary-card rate">
+                <h3>Success Rate</h3>
+                <div class="number">${stats.successRate}%</div>
+                <p>Overall Success</p>
             </div>
         </div>
 
-        <table class="results-table">
-            <thead>
-                <tr>
-                    <th>Test File</th>
-                    <th>Test Details</th>
-                    <th>User</th>
-                    <th>Status</th>
-                    <th>Duration</th>
-                    <th>Screenshots</th>
-                </tr>
-            </thead>
-            <tbody>${resultsHTML}</tbody>
-        </table>
+        <div class="test-results">
+            <h2>Detailed Test Results</h2>
+            ${resultsHTML}
+        </div>
     </div>
-
-    <div id="screenshotModal" class="modal">
-        <span class="close">&times;</span>
-        <img class="modal-content" id="modalImage">
-        <div id="caption" style="text-align: center; color: white; padding: 10px;"></div>
-    </div>
-
-    <script>
-        const modal = document.getElementById("screenshotModal");
-        const modalImg = document.getElementById("modalImage");
-        const captionText = document.getElementById("caption");
-        const closeBtn = document.getElementsByClassName("close")[0];
-
-        document.querySelectorAll('.screenshot').forEach(img => {
-            img.onclick = function() {
-                modal.style.display = "block";
-                modalImg.src = this.src;
-                captionText.innerHTML = this.getAttribute('data-filename') || 'Screenshot';
-            }
-        });
-
-        closeBtn.onclick = function() { modal.style.display = "none"; }
-        modal.onclick = function(event) { if (event.target === modal) modal.style.display = "none"; }
-        document.onkeydown = function(event) { if (event.key === "Escape") modal.style.display = "none"; }
-    </script>
 </body>
 </html>`;
     }
 
     private generateJSONContent(): string {
+        const stats = this.calculateStatistics();
         const reportData = {
             generatedAt: new Date().toISOString(),
             summary: {
-                totalTests: this.results.length,
-                passed: this.results.filter(r => r.status === 'passed').length,
-                failed: this.results.filter(r => r.status === 'failed').length,
-                skipped: this.results.filter(r => r.status === 'skipped').length,
-                successRate: this.results.length > 0 ? 
-                    ((this.results.filter(r => r.status === 'passed').length / this.results.length) * 100).toFixed(1) : '0'
+                totalTests: stats.total,
+                passed: stats.passed,
+                failed: stats.failed,
+                skipped: stats.skipped,
+                successRate: stats.successRate
             },
             results: this.results.map(result => ({
                 testName: result.testName,
@@ -540,32 +531,30 @@ export class ReportGenerator {
         const availableScreenshots = this.getScreenshotsForTest(result);
         
         const screenshotElements = availableScreenshots.length > 0 
-            ? availableScreenshots.map((screenshot, index) => {
-                const base64Image = this.getScreenshotBase64(screenshot);
-                return base64Image 
-                    ? `<img src="data:image/png;base64,${base64Image}" alt="Step ${index + 1}" class="screenshot" title="${screenshot}" data-filename="${screenshot}">`
-                    : `<div style="color: #e74c3c; font-size: 0.8em;">Failed: ${screenshot}</div>`;
-            }).join('')
-            : '<span class="no-screenshots">No screenshots</span>';
+            ? `<div class="screenshots">
+                <strong>Screenshots:</strong>
+                <ul class="screenshot-list">
+                    ${availableScreenshots.map(screenshot => 
+                        `<li>${screenshot}</li>`
+                    ).join('')}
+                </ul>
+               </div>`
+            : '';
 
         return `
-        <tr>
-            <td><span class="test-file">${result.testFile || 'unknown'}</span></td>
-            <td>
-                <strong>${result.testName}</strong>
-                <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
-                    ${availableScreenshots.length} screenshots
-                </div>
+        <div class="test-card ${result.status}">
+            <div class="test-header">
+                <span class="test-name">${result.testName}</span>
+                <span class="test-status status-${result.status}">${result.status.toUpperCase()}</span>
+            </div>
+            <div class="test-details">
+                <p><strong>👤 User:</strong> ${result.username} | <strong>🌐 Browser:</strong> ${result.browser || 'chromium'} | <strong>⏱️ Duration:</strong> <span class="duration">${result.duration}ms</span></p>
+                <p><strong>📁 File:</strong> ${result.testFile || 'unknown'}</p>
+                <p><strong>📅 Timestamp:</strong> ${result.timestamp.toISOString()}</p>
                 ${result.errorMessage ? `<div class="error-message">${this.escapeHtml(result.errorMessage)}</div>` : ''}
-            </td>
-            <td><span class="user-badge">${result.username}</span></td>
-            <td class="status-${result.status}">
-                ${result.status.toUpperCase()} 
-                ${result.status === 'passed' ? '✅' : result.status === 'failed' ? '❌' : '⚠️'}
-            </td>
-            <td>${(result.duration / 1000).toFixed(1)}s</td>
-            <td><div class="screenshot-gallery">${screenshotElements}</div></td>
-        </tr>`;
+                ${screenshotElements}
+            </div>
+        </div>`;
     }
 
     private calculateStatistics() {

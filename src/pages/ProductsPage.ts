@@ -1,6 +1,7 @@
 import { Page, expect, Locator } from '@playwright/test';
 import { logger } from '../utils/logger';
 import { CustomWait } from '../utils/customWait';
+import { CartPage } from './CartPage'; // NEW: Import CartPage for tracking
 
 export interface ProductInfo {
   name: string;
@@ -12,10 +13,12 @@ export interface ProductInfo {
 export class ProductsPage {
   readonly page: Page;
   private customWait: CustomWait;
+  private cartPage: CartPage; // NEW: CartPage instance for tracking
 
   constructor(page: Page) {
     this.page = page;
     this.customWait = new CustomWait(page);
+    this.cartPage = new CartPage(page); // NEW: Initialize CartPage for tracking
   }
 
   // ✅ OPTIMIZED Locators
@@ -65,6 +68,16 @@ export class ProductsPage {
   
   private get sortDropdown(): Locator {
     return this.page.locator('[data-test="product_sort_container"]');
+  }
+
+  // ✅ NEW: Get items count summary for reporting
+  getItemsCountSummary(): { added: number; removed: number; net: number } {
+    return this.cartPage.getItemsCountSummary();
+  }
+
+  // ✅ NEW: Reset item counts for new test
+  resetItemCounts(): void {
+    this.cartPage.resetItemCounts();
   }
 
   // ✅ OPTIMIZED: Wait for products to load with CI awareness
@@ -197,7 +210,7 @@ export class ProductsPage {
     return products;
   }
 
-  // ✅ OPTIMIZED: Add single product
+  // ✅ OPTIMIZED: Add single product - NOW TRACKS ITEMS
   private async addSingleProduct(product: ProductInfo): Promise<boolean> {
     try {
       // Scroll to element
@@ -219,6 +232,9 @@ export class ProductsPage {
       
       // Click the button
       await product.addButton.click();
+      
+      // ✅ NEW: Track the item addition
+      this.cartPage.trackItemAdded(product.name);
       
       // Verify button state changed
       await this.waitForCondition(
@@ -252,7 +268,7 @@ export class ProductsPage {
     }
   }
 
-  // ✅ OPTIMIZED: Add product by name
+  // ✅ OPTIMIZED: Add product by name - NOW TRACKS ITEMS
   async addProductByName(productName: string): Promise<boolean> {
     // ✅ FIXED: Use instance method instead of static method
     return await this.customWait.retryOperationInstance(
@@ -285,6 +301,9 @@ export class ProductsPage {
         
         // Click the button
         await addButton.click();
+        
+        // ✅ NEW: Track the item addition
+        this.cartPage.trackItemAdded(productName);
         
         // Verify button state changed
         await this.waitForCondition(
@@ -474,7 +493,7 @@ export class ProductsPage {
     );
   }
 
-  // ✅ NEW: Remove product from cart by name
+  // ✅ NEW: Remove product from cart by name - NOW TRACKS ITEMS
   async removeProductByName(productName: string): Promise<boolean> {
     // ✅ FIXED: Use instance method instead of static method
     return await this.customWait.retryOperationInstance(
@@ -498,6 +517,9 @@ export class ProductsPage {
         
         const currentCartCount = await this.getCartBadgeCount();
         await removeButton.click();
+        
+        // ✅ NEW: Track the item removal
+        this.cartPage.trackItemRemoved(productName);
         
         // Verify removal
         await this.waitForCondition(
@@ -606,6 +628,9 @@ export class ProductsPage {
         await this.page.goBack();
         await this.waitForProductsToLoad();
       }
+      
+      // ✅ NEW: Reset item counts when resetting app state
+      this.resetItemCounts();
       
       logger.info('App state reset completed');
     } catch (error) {

@@ -67,35 +67,35 @@ Prerequisites
 •	Node.js 16+
 •	npm or yarn
 
-Installation
+# Installation
 
-# Clone repository
+## Clone repository
 git clone https://github.com/umangabuddhiniw/playwright-saucedemo
 cd playwright-saucedemo
 
-# Install dependencies
+## Install dependencies
 npm install
 
-# Install Playwright browsers
+## Install Playwright browsers
 npx playwright install
 
-Running Tests
+## Running Tests
 
-# Run all tests in headless mode
+## Run all tests in headless mode
 npx playwright test
 
-# Run tests with visible browser UI
+## Run tests with visible browser UI
 npx playwright test --headed
 
-# Run specific test file
+## Run specific test file
 npx playwright test purchaseFlow.spec.ts --headed
 
-# Debug mode
+## Debug mode
 npx playwright test --debug
 
-Viewing Reports
+# Viewing Reports
 
-# Open interactive HTML report
+## Open interactive HTML report
 npx playwright show-report
 
 # Check test artifacts

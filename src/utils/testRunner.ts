@@ -13,8 +13,6 @@ export interface TestResult {
   errorMessage?: string;
   screenshots: string[];
   testFile: string;
-  itemsAdded?: number;
-  itemsRemoved?: number;
   browser?: string;
 }
 
@@ -99,7 +97,7 @@ class TestRunner implements Reporter {
 
   onTestEnd(test: any, result: any) {
     try {
-      // Extract username from test title or use default
+      // ✅ FIXED: Extract username from test title with all user types
       const username = this.extractUsername(test.title) || 'standard_user';
       
       // Extract browser from project name
@@ -119,9 +117,7 @@ class TestRunner implements Reporter {
         testFile: test.location?.file || 'unknown',
         errorMessage: result.error?.message || result.errors?.[0]?.message,
         screenshots: screenshots,
-        browser: browser,
-        itemsAdded: this.extractItemsAdded(test.title),
-        itemsRemoved: this.extractItemsRemoved(test.title)
+        browser: browser
       };
 
       this.addTestResult(testResult);
@@ -156,18 +152,9 @@ class TestRunner implements Reporter {
 
   // ✅ Helper methods
   private extractUsername(testTitle: string): string | null {
-    const usernameMatch = testTitle.match(/(standard_user|locked_user|problem_user|error_user|performance_glitch_user)/i);
+    // ✅ FIXED: Added visual_user to the regex pattern
+    const usernameMatch = testTitle.match(/(standard_user|locked_out_user|problem_user|error_user|performance_glitch_user|visual_user)/i);
     return usernameMatch ? usernameMatch[1] : null;
-  }
-
-  private extractItemsAdded(testTitle: string): number {
-    const match = testTitle.match(/add.*?(\d+).*item/i);
-    return match ? parseInt(match[1]) : 0;
-  }
-
-  private extractItemsRemoved(testTitle: string): number {
-    const match = testTitle.match(/remove.*?(\d+).*item/i);
-    return match ? parseInt(match[1]) : 0;
   }
 
   // ✅ Method to clear results for new test run
@@ -217,6 +204,7 @@ class TestRunner implements Reporter {
       
       logger.error('Failed to add test result', {
         testName: result.testName,
+        username: result.username,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
@@ -279,7 +267,10 @@ class TestRunner implements Reporter {
           ci: !!process.env.CI,
           status: this.getSummary()
         },
-        summary: this.getSummary(),
+        summary: {
+          ...this.getSummary(),
+          uniqueUsernames: [...new Set(this.testResults.map(r => r.username))]
+        },
         testResults: this.testResults
       };
       
@@ -489,7 +480,6 @@ playwright-report/                 # ✅ Playwright HTML reports
                         <p><strong>👤 User:</strong> ${this.escapeHtml(result.username)} | <strong>🌐 Browser:</strong> ${result.browser || 'chromium'} | <strong>⏱️ Duration:</strong> <span class="duration">${result.duration}ms</span></p>
                         <p><strong>📁 File:</strong> ${this.escapeHtml(result.testFile)}</p>
                         <p><strong>📅 Timestamp:</strong> ${result.timestamp.toISOString()}</p>
-                        ${result.itemsAdded !== undefined ? `<p><strong>🛒 Items:</strong> Added: ${result.itemsAdded} | Removed: ${result.itemsRemoved || 0}</p>` : ''}
                         ${result.screenshots.length > 0 ? `
                             <div class="screenshots">
                                 <strong>📸 Screenshots (${result.screenshots.length}):</strong>

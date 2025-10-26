@@ -11,8 +11,6 @@ export interface TestResultData {
   duration: string;
   screenshots: string[];
   errorMessage?: string;
-  itemsAdded?: number;
-  itemsRemoved?: number;
   startTime?: Date;
   endTime?: Date;
 }
@@ -35,21 +33,22 @@ class ResultsCollector {
         return;
       }
 
+      // ✅ FIXED: Preserve the original username from the result
+      const originalUsername = result.username || 'unknown';
+      
       // Convert duration string to number for TestRunner
       const duration = parseInt(result.duration) || 0;
 
       // Also add to TestRunner for report generation
       const testRunnerResult: TestResult = {
         testName: result.testName,
-        username: result.username || 'unknown',
+        username: originalUsername,
         status: result.status,
         duration: duration,
         timestamp: new Date(),
         testFile: result.testFile || 'unknown',
         errorMessage: result.errorMessage,
         screenshots: Array.isArray(result.screenshots) ? result.screenshots : [],
-        itemsAdded: result.itemsAdded || 0,
-        itemsRemoved: result.itemsRemoved || 0,
         browser: result.browser || 'unknown'
       };
 
@@ -60,14 +59,12 @@ class ResultsCollector {
       const processedResult: TestResultData = {
         testFile: result.testFile || 'unknown',
         testName: result.testName,
-        username: result.username || 'unknown',
+        username: originalUsername,
         browser: result.browser || 'unknown',
         status: result.status,
         duration: result.duration || '0',
         screenshots: Array.isArray(result.screenshots) ? result.screenshots : [],
         errorMessage: result.errorMessage,
-        itemsAdded: result.itemsAdded || 0,
-        itemsRemoved: result.itemsRemoved || 0,
         startTime: result.startTime || new Date(),
         endTime: result.endTime || new Date()
       };
@@ -77,6 +74,7 @@ class ResultsCollector {
       
       console.log('✅ Test result added to both collectors:', {
         testName: processedResult.testName,
+        username: processedResult.username,
         status: processedResult.status,
         duration: processedResult.duration,
         screenshots: processedResult.screenshots.length,
@@ -96,17 +94,30 @@ class ResultsCollector {
       console.error('❌ Error adding test result to collector:', error);
       logger.error('Failed to add test result', {
         testName: result.testName,
+        username: result.username,
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
 
   getStats() {
-    // Use TestRunner stats for consistency
-    const testRunnerStats = testRunner.getStats();
-    
-    console.log('📈 Collector Statistics:', testRunnerStats);
-    return testRunnerStats;
+    const total = this.results.length;
+    const passed = this.results.filter(r => r.status === 'passed').length;
+    const failed = this.results.filter(r => r.status === 'failed').length;
+    const skipped = this.results.filter(r => r.status === 'skipped').length;
+    const successRate = total > 0 ? ((passed / total) * 100).toFixed(2) : '0.00';
+
+    const stats = {
+      total,
+      passed,
+      failed,
+      skipped,
+      successRate,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log('📈 Collector Statistics:', stats);
+    return stats;
   }
 
   getAllResults(): TestResultData[] {
@@ -171,6 +182,13 @@ class ResultsCollector {
   getResultsCount(): number {
     return this.results.length;
   }
+
+  // ✅ Method to get results by username
+  getResultsByUsername(username: string): TestResultData[] {
+    const filtered = this.results.filter(result => result.username === username);
+    console.log(`📋 Returning ${filtered.length} results for user: ${username}`);
+    return filtered;
+  }
 }
 
 // ✅ Static methods for TestRunner integration
@@ -184,8 +202,6 @@ export class ResultsCollectorStatic {
     options: {
       errorMessage?: string;
       screenshots?: string[];
-      itemsAdded?: number;
-      itemsRemoved?: number;
       browser?: string;
     } = {}
   ): void {
@@ -198,8 +214,6 @@ export class ResultsCollectorStatic {
       testFile,
       errorMessage: options.errorMessage,
       screenshots: options.screenshots || [],
-      itemsAdded: options.itemsAdded,
-      itemsRemoved: options.itemsRemoved,
       browser: options.browser
     };
 
@@ -213,7 +227,7 @@ export class ResultsCollectorStatic {
       testFile
     });
 
-    console.log(`✅ Static collector: Added test result for ${testName}`);
+    console.log(`✅ Static collector: Added test result for ${testName} - User: ${username}`);
   }
 
   static generateReports(): { htmlReportPath: string; jsonReportPath: string } {
@@ -244,18 +258,48 @@ export class ResultsCollectorStatic {
     const localResultsCount = resultsCollector.getResultsCount();
     const localHealth = resultsCollector.healthCheck();
     
+    // Get unique usernames for better reporting
+    const uniqueUsernames = [...new Set(resultsCollector.getAllResults().map(r => r.username))];
+    
     return {
       testRunner: testRunnerStats,
       localCollector: {
         totalResults: localResultsCount,
-        health: localHealth
+        health: localHealth,
+        uniqueUsernames: uniqueUsernames
       },
       combined: {
         totalTests: testRunnerStats.total,
         successRate: testRunnerStats.successRate,
-        environment: process.env.CI ? 'GitHub Actions' : 'Local Development'
+        environment: process.env.CI ? 'GitHub Actions' : 'Local Development',
+        usersTested: uniqueUsernames.length
       }
     };
+  }
+
+  // ✅ Static method to verify username preservation
+  static verifyUsernamePreservation(): { preserved: boolean; issues: string[] } {
+    const issues: string[] = [];
+    const testRunnerResults = testRunner.getResults();
+    const localResults = resultsCollector.getAllResults();
+    
+    // Check for username mismatches between TestRunner and local collector
+    testRunnerResults.forEach(trResult => {
+      const localMatch = localResults.find(lr => lr.testName === trResult.testName);
+      if (localMatch && localMatch.username !== trResult.username) {
+        issues.push(`Username mismatch for test "${trResult.testName}": TestRunner="${trResult.username}", Local="${localMatch.username}"`);
+      }
+    });
+
+    const preserved = issues.length === 0;
+    
+    if (!preserved) {
+      console.warn('⚠️ Username preservation issues detected:', issues);
+    } else {
+      console.log('✅ All usernames properly preserved across collectors');
+    }
+    
+    return { preserved, issues };
   }
 }
 
@@ -268,6 +312,7 @@ export const generateReports = ResultsCollectorStatic.generateReports;
 export const clearPreviousResults = ResultsCollectorStatic.clearPreviousResults;
 export const getTestRunnerResults = ResultsCollectorStatic.getTestRunnerResults;
 export const getCombinedStats = ResultsCollectorStatic.getCombinedStats;
+export const verifyUsernamePreservation = ResultsCollectorStatic.verifyUsernamePreservation;
 
 // ✅ Export the instance methods for backward compatibility
 export { ResultsCollector };

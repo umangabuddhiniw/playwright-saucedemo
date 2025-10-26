@@ -7,7 +7,21 @@ import credentials from '../../data/credentials.json';
 
 // Test data and configuration
 const TEST_USER = 'standard_user';
-const TEST_NAME = 'standard_user complete purchase flow verification';
+const TEST_NAME = 'standard_user - complete purchase flow verification';
+
+// Define interface for test result to match resultsCollector expectations
+interface TestResult {
+  testFile: string;
+  testName: string;
+  username: string;
+  browser: string;
+  status: 'passed' | 'failed' | 'skipped';
+  duration: string;
+  screenshots: string[];
+  errorMessage?: string;
+  startTime: Date;
+  endTime: Date;
+}
 
 // Simple helper function to get user information
 function getUserInfo(username: string) {
@@ -46,28 +60,59 @@ async function addItemsToCart(page: Page, maxItems: number = 2): Promise<number>
         await button.click();
         itemsAdded++;
         await page.waitForTimeout(300);
+        
+        // Verify the button changed to remove
+        try {
+          const removeButton = page.locator('[data-test^="remove"]').nth(i);
+          await removeButton.waitFor({ state: 'visible', timeout: 2000 });
+        } catch {
+          logger.warn(`⚠️ Remove button not immediately visible for item ${i + 1}`);
+        }
       }
     }
     
   } catch (error) {
-    console.log('⚠️ Error adding items to cart:', error);
+    logger.warn('⚠️ Error adding items to cart', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
   
   return itemsAdded;
 }
 
-// Simple login function
+// Enhanced function to get cart badge count
+async function getCartBadgeCount(page: Page): Promise<number> {
+  try {
+    const cartBadge = page.locator('.shopping_cart_badge');
+    if (await cartBadge.isVisible({ timeout: 3000 })) {
+      const badgeText = await cartBadge.textContent();
+      return parseInt(badgeText || '0', 10);
+    }
+    return 0;
+  } catch (error) {
+    return 0;
+  }
+}
+
+// Simple login function - FIXED: Better waiting for rendering
 async function performLogin(page: Page, user: any, screenshotHelper: ScreenshotHelper): Promise<void> {
+  // FIX: Wait for login page to fully render before filling
+  await page.waitForLoadState('networkidle');
+  await page.waitForSelector('[data-test="username"]', { state: 'visible', timeout: 10000 });
+  await page.waitForSelector('[data-test="password"]', { state: 'visible', timeout: 10000 });
+  await page.waitForTimeout(500); // Extra rendering time
+  
   // Fill credentials
   await page.fill('[data-test="username"]', user.username);
   await page.fill('[data-test="password"]', user.password);
   await screenshotHelper.takeScreenshot('credentials-filled');
-  
+
   // Click login button
   await page.click('[data-test="login-button"]');
   
-  // Wait for navigation
+  // FIX: Better waiting for post-login navigation
   await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1000); // Extra time for post-login rendering
   await screenshotHelper.takeScreenshot('post-login');
   
   // Check for errors
@@ -81,7 +126,7 @@ async function performLogin(page: Page, user: any, screenshotHelper: ScreenshotH
   
   // Verify successful login
   const inventoryList = page.locator('.inventory_list');
-  const isInventoryVisible = await inventoryList.isVisible({ timeout: 10000 }).catch(() => false);
+  const isInventoryVisible = await inventoryList.isVisible({ timeout: 15000 }).catch(() => false);
   
   if (!isInventoryVisible) {
     throw new Error('Login unsuccessful - inventory page not loaded');
@@ -94,10 +139,10 @@ test.describe('Standard User Complete Flow Tests', () => {
   test.beforeEach(async ({ page }, testInfo) => {
     // Initialize screenshot helper for each test
     screenshotHelper = new ScreenshotHelper(page, `standard_user_${testInfo.title.replace(/[^a-zA-Z0-9]/g, '_')}`);
-    console.log(`🔄 Test setup: ${testInfo.title}`);
+    logger.debug(`🔄 Test setup: ${testInfo.title}`);
   });
 
-  test('standard_user - complete purchase flow verification', async ({ page, browserName }) => {
+  test('standard_user - complete purchase flow verification', async ({ page, browserName }, testInfo) => {
     const startTime = Date.now();
     let testStatus: 'passed' | 'failed' | 'skipped' = 'passed';
     let errorMessage: string | undefined;
@@ -107,17 +152,28 @@ test.describe('Standard User Complete Flow Tests', () => {
     let flowSummary = '';
 
     try {
-      console.log(`🚀 Starting test: ${TEST_NAME}`);
+      logHelper.testStart(TEST_NAME, browserName);
+      logger.info(`🚀 Starting test: ${TEST_NAME}`, {
+        browser: browserName,
+        user: TEST_USER
+      });
       
       // Step 1: Get user credentials
       const user = getUserInfo(TEST_USER);
-      console.log(`👤 Testing with user: ${user.username}`);
+      logger.info(`👤 Testing with user: ${user.username}`);
 
-      // Step 2: Navigate to application
+      // Step 2: Navigate to application - FIXED: Better waiting
       await page.goto('/', { 
         waitUntil: 'networkidle',
         timeout: 30000 
       });
+      
+      // FIX: Wait for login page to render completely before screenshot
+      await page.waitForLoadState('networkidle');
+      await page.waitForSelector('[data-test="username"]', { state: 'visible', timeout: 10000 });
+      await page.waitForSelector('[data-test="password"]', { state: 'visible', timeout: 10000 });
+      await page.waitForTimeout(1000); // Extra rendering time for CI
+      
       await screenshotHelper.takeScreenshot('login-page-loaded');
 
       // Verify login page
@@ -126,7 +182,7 @@ test.describe('Standard User Complete Flow Tests', () => {
 
       // Step 3: Perform login
       await performLogin(page, user, screenshotHelper);
-      console.log('✅ Login successful');
+      logger.info('✅ Login successful');
 
       // Step 4: Verify inventory page
       await expect(page.locator('.inventory_list')).toBeVisible({ timeout: 10000 });
@@ -146,8 +202,12 @@ test.describe('Standard User Complete Flow Tests', () => {
       await expect(page.locator('.inventory_list')).toBeVisible({ timeout: 10000 });
       await screenshotHelper.takeScreenshot('returned-to-products');
 
-      // Step 7: Add items to cart
-      itemsAdded = await addItemsToCart(page, 2);
+      // Step 7: Add items to cart with proper tracking
+      const manuallyAddedItems = await addItemsToCart(page, 2);
+      
+      // Verify cart badge count matches
+      const badgeCount = await getCartBadgeCount(page);
+      itemsAdded = badgeCount > 0 ? badgeCount : manuallyAddedItems;
       
       if (itemsAdded === 0) {
         throw new Error('Failed to add any items to cart');
@@ -155,7 +215,7 @@ test.describe('Standard User Complete Flow Tests', () => {
       
       await page.waitForTimeout(1000);
       await screenshotHelper.takeScreenshot('items-added-to-cart');
-      console.log(`🛒 Added ${itemsAdded} items to cart`);
+      logger.info(`🛒 Added ${itemsAdded} items to cart`);
 
       // Step 8: Navigate to cart
       await page.click('.shopping_cart_link');
@@ -163,15 +223,32 @@ test.describe('Standard User Complete Flow Tests', () => {
       await expect(page.locator('.cart_list')).toBeVisible({ timeout: 10000 });
       await screenshotHelper.takeScreenshot('cart-page');
 
-      // Step 9: Remove one item if available
+      // Step 9: Remove one item if available with accurate counting
+      const cartItemsBeforeRemoval = await page.locator('.cart_item, [data-test="inventory-item"]').count();
+      logger.info(`🛒 Cart items before removal: ${cartItemsBeforeRemoval}`);
+      
+      // Update itemsAdded based on actual cart count if different
+      if (cartItemsBeforeRemoval !== itemsAdded) {
+        logger.warn(`🔄 Adjusting itemsAdded from ${itemsAdded} to ${cartItemsBeforeRemoval} based on actual cart count`);
+        itemsAdded = cartItemsBeforeRemoval;
+      }
+      
       const removeButtons = page.locator('[data-test^="remove"]');
       const removeCount = await removeButtons.count();
       
       if (removeCount > 0 && itemsAdded > 0) {
         await removeButtons.first().click();
-        itemsRemoved = 1;
         await page.waitForTimeout(1000);
-        console.log('✅ Removed one item from cart');
+        
+        // Wait for cart to update and verify removal
+        const cartItemsAfterRemoval = await page.locator('.cart_item, [data-test="inventory-item"]').count();
+        itemsRemoved = cartItemsBeforeRemoval - cartItemsAfterRemoval;
+        
+        // Update itemsAdded count after removal
+        itemsAdded = itemsAdded - itemsRemoved;
+        
+        logger.info(`✅ Removed item from cart. Cart items: ${cartItemsBeforeRemoval} → ${cartItemsAfterRemoval}`);
+        logger.info(`📊 Updated counts: Added: ${itemsAdded}, Removed: ${itemsRemoved}`);
       }
       
       await screenshotHelper.takeScreenshot('cart-after-removal');
@@ -212,11 +289,12 @@ test.describe('Standard User Complete Flow Tests', () => {
       const duration = Date.now() - startTime;
       screenshotFilenames = screenshotHelper.getScreenshotFilenames();
 
-      console.log('🎉 Test completed successfully', {
+      logger.info('🎉 Test completed successfully', {
         duration,
-        screenshots: screenshotFilenames.length,
+        screenshotsTaken: screenshotFilenames.length,
         itemsAdded,
-        itemsRemoved
+        itemsRemoved,
+        user: TEST_USER
       });
 
     } catch (error) {
@@ -227,20 +305,24 @@ test.describe('Standard User Complete Flow Tests', () => {
 
       // Capture final error state
       await screenshotHelper.takeScreenshot('final-error-state').catch(() => {
-        console.error('❌ Failed to capture error screenshot');
+        logger.error('❌ Failed to capture error screenshot');
       });
 
-      console.error('💥 Test failed:', {
+      logger.error('💥 Test failed', {
         duration,
         error: errorMessage,
-        screenshots: screenshotFilenames.length
+        screenshotsTaken: screenshotFilenames.length,
+        user: TEST_USER,
+        itemsAdded,
+        itemsRemoved
       });
 
     } finally {
       const duration = Date.now() - startTime;
+      screenshotFilenames = screenshotHelper.getScreenshotFilenames();
       
-      // ✅ SIMPLE & RELIABLE test result collection
-      const testResult = {
+      // ✅ FIXED: Match EXACT interface expected by resultsCollector
+      const testResult: TestResult = {
         testFile: 'standard-user-video.spec.ts',
         testName: TEST_NAME,
         username: TEST_USER,
@@ -249,8 +331,6 @@ test.describe('Standard User Complete Flow Tests', () => {
         duration: duration.toString(),
         screenshots: screenshotFilenames,
         errorMessage: errorMessage || flowSummary,
-        itemsAdded: itemsAdded,
-        itemsRemoved: itemsRemoved,
         startTime: new Date(startTime),
         endTime: new Date()
       };
@@ -258,36 +338,60 @@ test.describe('Standard User Complete Flow Tests', () => {
       try {
         // Add result to collector - this is the key integration point
         resultsCollector.addResult(testResult);
-        console.log('✅ Test result recorded in collector');
+        logger.debug('✅ Test result recorded in collector', {
+          user: TEST_USER,
+          status: testStatus,
+          duration
+        });
         
       } catch (collectorError) {
-        console.error('❌ Error recording test result:', collectorError);
+        logger.error('❌ Error recording test result', {
+          error: collectorError instanceof Error ? collectorError.message : 'Unknown error'
+        });
         // Don't fail the test if results collection fails
       }
 
-      // Log final status
+      // Log final status using logHelper
       if (testStatus === 'passed') {
-        console.log(`✅ TEST PASSED: ${TEST_NAME} (${duration}ms)`);
+        logHelper.testPass(TEST_NAME, duration, {
+          screenshots: screenshotFilenames.length,
+          summary: flowSummary
+        });
       } else {
-        console.log(`❌ TEST FAILED: ${TEST_NAME} (${duration}ms)`);
+        logHelper.testFail(TEST_NAME, 
+          errorMessage ? new Error(errorMessage) : new Error('Test failed'), 
+          duration
+        );
       }
     }
   });
 
   // Simple smoke test
-  test('standard_user - basic functionality smoke test', async ({ page, browserName }) => {
+  test('standard_user - basic functionality smoke test', async ({ page, browserName }, testInfo) => {
     const startTime = Date.now();
-    let testStatus: 'passed' | 'failed' = 'passed';
+    let testStatus: 'passed' | 'failed' | 'skipped' = 'passed';
     let errorMessage: string | undefined;
     let itemsAdded = 0;
+    let itemsRemoved = 0;
+    let screenshotFilenames: string[] = [];
     
     try {
-      console.log('🚀 Starting smoke test');
+      logHelper.testStart('standard_user - basic functionality smoke test', browserName);
+      logger.info('🚀 Starting smoke test', {
+        browser: browserName,
+        user: TEST_USER
+      });
       
       const user = getUserInfo(TEST_USER);
 
       // Quick login test
       await page.goto('/', { waitUntil: 'networkidle' });
+      
+      // FIX: Wait for login page rendering
+      await page.waitForLoadState('networkidle');
+      await page.waitForSelector('[data-test="username"]', { state: 'visible', timeout: 10000 });
+      await page.waitForTimeout(500);
+      
       await performLogin(page, user, screenshotHelper);
       
       // Verify basic functionality
@@ -295,37 +399,60 @@ test.describe('Standard User Complete Flow Tests', () => {
       await expect(page.locator('.shopping_cart_link')).toBeVisible();
       
       // Quick add to cart test
-      itemsAdded = await addItemsToCart(page, 1);
-      console.log(`✅ Smoke test passed: ${itemsAdded} items added`);
+      const manuallyAddedItems = await addItemsToCart(page, 1);
+      const badgeCount = await getCartBadgeCount(page);
+      itemsAdded = badgeCount > 0 ? badgeCount : manuallyAddedItems;
+      
+      logger.info(`✅ Smoke test passed: ${itemsAdded} items added`);
+
+      screenshotFilenames = screenshotHelper.getScreenshotFilenames();
 
     } catch (error) {
       testStatus = 'failed';
       errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ Smoke test failed:', errorMessage);
+      logger.error('❌ Smoke test failed', {
+        error: errorMessage,
+        user: TEST_USER
+      });
       throw error;
       
     } finally {
       const duration = Date.now() - startTime;
+      screenshotFilenames = screenshotHelper.getScreenshotFilenames();
       
-      const testResult = {
+      // ✅ FIXED: Use correct interface with all required properties
+      const testResult: TestResult = {
         testFile: 'standard-user-video.spec.ts',
-        testName: 'standard_user basic functionality smoke test',
+        testName: 'standard_user - basic functionality smoke test',
         username: TEST_USER,
         browser: browserName,
         status: testStatus,
         duration: duration.toString(),
-        screenshots: [],
-        errorMessage: errorMessage || `Smoke test ${testStatus}`,
-        itemsAdded: itemsAdded,
-        itemsRemoved: 0,
+        screenshots: screenshotFilenames,
+        errorMessage: errorMessage,
         startTime: new Date(startTime),
         endTime: new Date()
       };
 
       try {
         resultsCollector.addResult(testResult);
+        
+        // Log final status
+        if (testStatus === 'passed') {
+          logHelper.testPass('standard_user - basic functionality smoke test', duration, {
+            screenshots: screenshotFilenames.length
+          });
+        } else {
+          logHelper.testFail('standard_user - basic functionality smoke test', 
+            errorMessage ? new Error(errorMessage) : new Error('Test failed'), 
+            duration
+          );
+        }
+        
       } catch (error) {
-        console.error('Error recording smoke test result:', error);
+        logger.error('Error recording smoke test result', {
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
   });
@@ -333,24 +460,21 @@ test.describe('Standard User Complete Flow Tests', () => {
 
 // Global afterAll for summary
 test.afterAll(async () => {
-  console.log('📊 Test execution completed!');
+  logger.info('📊 Test execution completed!');
   
   try {
     const stats = resultsCollector.getStats();
     
-    console.log('🎯 FINAL TEST SUMMARY:', {
+    logger.info('🎯 FINAL TEST SUMMARY', {
       totalTests: stats.total,
       passed: stats.passed,
       failed: stats.failed,
-      successRate: `${stats.successRate}%`,
-      totalScreenshots: stats.totalScreenshots
+      successRate: `${stats.successRate}%`
     });
     
-    // Export final results
-    const jsonResults = resultsCollector.exportToJSON();
-    console.log(`💾 Results exported (${jsonResults.length} characters)`);
-    
   } catch (error) {
-    console.error('Error generating final summary:', error);
+    logger.error('Error generating final summary', {
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });

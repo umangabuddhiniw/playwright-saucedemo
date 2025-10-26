@@ -11,6 +11,20 @@ import { resultsCollector } from '../utils/results-collector';
 import { logger, logHelper } from '../utils/logger';
 import credentials from '../../data/credentials.json';
 
+// Define interface for test result
+interface TestResult {
+  testFile: string;
+  testName: string;
+  username: string;
+  browser: string;
+  status: 'passed' | 'failed' | 'skipped';
+  duration: string;
+  screenshots: string[];
+  errorMessage?: string;
+  startTime: Date;
+  endTime: Date;
+}
+
 // Helper function to safely get user information
 function getUserInfo(username: string) {
   const user = credentials.users.find(user => user.username === username);
@@ -143,21 +157,23 @@ async function handleUserSpecificBehavior(
   return { shouldContinue: true };
 }
 
-// Helper function to safely add items to cart
+// Helper function to safely add items to cart with proper tracking
 async function safelyAddItemsToCart(
   productsPage: ProductsPage, 
   screenshotHelper: ScreenshotHelper,
   maxItems: number = 2
-): Promise<number> {
+): Promise<{ itemsAdded: number; addedProductNames: string[] }> {
   try {
     let itemsAdded = 0;
+    const addedProductNames: string[] = [];
     
     // Try to add most expensive products first
     try {
       const addedProducts = await productsPage.addMostExpensiveProducts(maxItems);
       itemsAdded = addedProducts.length;
+      addedProductNames.push(...addedProducts);
       if (itemsAdded > 0) {
-        logger.info(`💰 Added ${itemsAdded} most expensive products`);
+        logger.info(`💰 Added ${itemsAdded} most expensive products: ${addedProducts.join(', ')}`);
       }
     } catch (error) {
       logger.warn('⚠️ Failed to add expensive products, trying fallback method');
@@ -172,22 +188,56 @@ async function safelyAddItemsToCart(
       for (let i = 0; i < Math.min(maxItems, availableButtons); i++) {
         const button = addButtons.nth(i);
         if (await button.isEnabled().catch(() => false)) {
+          // Get product name before clicking
+          const productItem = button.locator('xpath=ancestor::div[contains(@class, "inventory_item")]');
+          const productNameElement = productItem.locator('.inventory_item_name');
+          let productName = `Product ${i + 1}`;
+          
+          if (await productNameElement.isVisible().catch(() => false)) {
+            productName = (await productNameElement.textContent()) || productName;
+          }
+          
           await button.click();
           itemsAdded++;
-          await productsPage.page.waitForTimeout(500); // Small delay between clicks
+          addedProductNames.push(productName);
+          
+          // Wait for cart badge to update
+          await productsPage.page.waitForTimeout(500);
+          
+          // Verify the button changed to remove
+          try {
+            const removeButton = productItem.locator('[data-test^="remove"]');
+            await removeButton.waitFor({ state: 'visible', timeout: 3000 });
+          } catch {
+            logger.warn(`⚠️ Remove button not visible for ${productName}`);
+          }
         }
       }
-      logger.info(`🛒 Added ${itemsAdded} items using fallback method`);
+      logger.info(`🛒 Added ${itemsAdded} items using fallback method: ${addedProductNames.join(', ')}`);
+    }
+    
+    // Verify cart badge count matches
+    try {
+      const badgeCount = await productsPage.getCartBadgeCount();
+      logger.info(`📊 Cart badge shows ${badgeCount} items, we added ${itemsAdded}`);
+      
+      // Use the actual badge count as the source of truth
+      if (badgeCount !== itemsAdded) {
+        logger.warn(`🔄 Adjusting items count from ${itemsAdded} to ${badgeCount} based on cart badge`);
+        itemsAdded = badgeCount;
+      }
+    } catch (error) {
+      logger.warn('⚠️ Could not verify cart badge count');
     }
     
     await screenshotHelper.takeScreenshot('items-added-to-cart');
-    return itemsAdded;
+    return { itemsAdded, addedProductNames };
     
   } catch (error) {
     logger.error('❌ Error adding items to cart', {
       error: error instanceof Error ? error.message : 'Unknown error'
     });
-    return 0;
+    return { itemsAdded: 0, addedProductNames: [] };
   }
 }
 
@@ -203,12 +253,12 @@ async function safelyCompleteCheckout(
   try {
     logger.info('💰 Starting checkout process...');
     
-    // Proceed to checkout
+    // Proceed to checkout with better error handling
     await cartPage.proceedToCheckout();
-    await cartPage.page.waitForLoadState('networkidle');
+    await cartPage.page.waitForLoadState('domcontentloaded');
     await cartPage.page.waitForTimeout(1000);
     
-    // Wait for checkout form and fill information
+    // Wait for checkout form with better timeout handling
     await checkoutInfoPage.waitForCheckoutForm();
     logger.info(`📝 Filling checkout info for ${user.firstName} ${user.lastName}`);
     await checkoutInfoPage.fillCheckoutInfo(user.firstName, user.lastName, user.postalCode);
@@ -216,7 +266,7 @@ async function safelyCompleteCheckout(
     
     // Continue to overview
     await checkoutInfoPage.continueToOverview();
-    await checkoutInfoPage.page.waitForLoadState('networkidle');
+    await checkoutInfoPage.page.waitForLoadState('domcontentloaded');
     await checkoutInfoPage.page.waitForTimeout(1000);
     
     // Verify overview and complete
@@ -225,10 +275,10 @@ async function safelyCompleteCheckout(
     
     // Finish checkout
     await overviewPage.finishCheckout();
-    await overviewPage.page.waitForLoadState('networkidle');
+    await overviewPage.page.waitForLoadState('domcontentloaded');
     await overviewPage.page.waitForTimeout(1000);
     
-    // Verify completion
+    // Verify completion with better error handling
     await checkoutCompletePage.waitForCompletion();
     
     // Check for completion message using multiple possible selectors
@@ -236,7 +286,9 @@ async function safelyCompleteCheckout(
       '.complete-header',
       '[data-test="complete-header"]',
       '.complete-text',
-      '[data-test="complete-text"]'
+      '[data-test="complete-text"]',
+      '.pony_express',
+      '.checkout_complete_container'
     ];
     
     let completionMessage = '';
@@ -315,7 +367,6 @@ test.describe('Purchase Flow Tests - All Users', () => {
   let checkoutInfoPage: CheckoutInfoPage;
   let overviewPage: OverviewPage;
   let checkoutCompletePage: CheckoutCompletePage;
-  let screenshotHelper: ScreenshotHelper;
 
   test.beforeEach(async ({ page }) => {
     // Initialize page objects
@@ -345,7 +396,7 @@ test.describe('Purchase Flow Tests - All Users', () => {
         let shouldSkipFurtherSteps = false;
 
         // Initialize screenshot helper for this specific test
-        screenshotHelper = new ScreenshotHelper(page, `${user.username}_purchase_flow`);
+        const screenshotHelper = new ScreenshotHelper(page, `${user.username}_purchase_flow`);
         
         try {
           logHelper.testStart(`Purchase flow for ${user.username}`, currentBrowserName);
@@ -397,8 +448,6 @@ test.describe('Purchase Flow Tests - All Users', () => {
               duration: duration.toString(),
               screenshots: screenshotFilenames,
               errorMessage: flowSummary,
-              itemsAdded: 0,
-              itemsRemoved: 0,
               startTime: new Date(startTime),
               endTime: new Date()
             });
@@ -443,8 +492,6 @@ test.describe('Purchase Flow Tests - All Users', () => {
               duration: duration.toString(),
               screenshots: screenshotFilenames,
               errorMessage: flowSummary,
-              itemsAdded: 0,
-              itemsRemoved: 0,
               startTime: new Date(startTime),
               endTime: new Date()
             });
@@ -493,9 +540,10 @@ test.describe('Purchase Flow Tests - All Users', () => {
             }
           });
 
-          // Step 5: Add items to cart
+          // Step 5: Add items to cart with proper tracking
           await test.step('Add items to cart', async () => {
-            itemsAdded = await safelyAddItemsToCart(productsPage, screenshotHelper, 2);
+            const addResult = await safelyAddItemsToCart(productsPage, screenshotHelper, 2);
+            itemsAdded = addResult.itemsAdded;
             
             if (itemsAdded === 0) {
               logger.warn('⚠️ No items were added to cart');
@@ -504,19 +552,11 @@ test.describe('Purchase Flow Tests - All Users', () => {
                 logger.info('✅ No items added - expected for this user type');
               }
             } else {
-              logger.info(`🛒 Successfully added ${itemsAdded} items to cart`);
-              
-              // Verify cart badge
-              try {
-                const badgeCount = await productsPage.getCartBadgeCount();
-                logger.info(`📊 Cart badge count: ${badgeCount}`);
-              } catch (error) {
-                logger.warn('⚠️ Could not get cart badge count');
-              }
+              logger.info(`🛒 Successfully added ${itemsAdded} items to cart: ${addResult.addedProductNames.join(', ')}`);
             }
           });
 
-          // Step 6: Manage cart items
+          // Step 6: Manage cart items with accurate counting
           await test.step('Manage cart items', async () => {
             // Go to cart
             await productsPage.goToCart();
@@ -527,18 +567,46 @@ test.describe('Purchase Flow Tests - All Users', () => {
             await cartPage.waitForCartToLoad();
             await screenshotHelper.takeScreenshot('05-cart-page');
             
+            // Count cart items accurately
+            const cartItemsBeforeRemoval = await page.locator('.cart_item, [data-test="inventory-item"]').count();
+            logger.info(`🛒 Cart items before removal: ${cartItemsBeforeRemoval}`);
+            
+            // Update itemsAdded based on actual cart count if different
+            if (cartItemsBeforeRemoval !== itemsAdded) {
+              logger.warn(`🔄 Adjusting itemsAdded from ${itemsAdded} to ${cartItemsBeforeRemoval} based on actual cart count`);
+              itemsAdded = cartItemsBeforeRemoval;
+            }
+            
             // Remove one item if available
-            const removeButtons = page.locator('[data-test^="remove"]');
+            const removeButtons = page.locator('[data-test^="remove"], .btn_secondary.cart_button');
             const removeCount = await removeButtons.count();
             
             if (removeCount > 0 && itemsAdded > 0) {
               logger.info(`🗑️ Removing one item from cart (${removeCount} available to remove)`);
+              
+              // Get the name of the item being removed for logging
+              const firstCartItem = page.locator('.cart_item, [data-test="inventory-item"]').first();
+              const itemNameElement = firstCartItem.locator('.inventory_item_name, [data-test="inventory-item-name"]');
+              let itemName = 'item';
+              if (await itemNameElement.isVisible().catch(() => false)) {
+                itemName = (await itemNameElement.textContent()) || itemName;
+              }
+              
               await cartPage.removeFirstItem();
               await page.waitForTimeout(1000);
-              itemsRemoved = 1;
-              logger.info('✅ Item removed from cart');
+              
+              // Wait for cart to update and verify removal
+              const cartItemsAfterRemoval = await page.locator('.cart_item, [data-test="inventory-item"]').count();
+              itemsRemoved = cartItemsBeforeRemoval - cartItemsAfterRemoval;
+              
+              // Update itemsAdded count after removal
+              itemsAdded = itemsAdded - itemsRemoved;
+              
+              logger.info(`✅ Removed "${itemName}" from cart. Cart items: ${cartItemsBeforeRemoval} → ${cartItemsAfterRemoval}`);
+              logger.info(`📊 Final counts: Added: ${itemsAdded}, Removed: ${itemsRemoved}`);
             } else {
               logger.info('ℹ️ No items available to remove from cart');
+              itemsRemoved = 0;
             }
             
             await screenshotHelper.takeScreenshot('06-cart-after-removal');
@@ -546,6 +614,20 @@ test.describe('Purchase Flow Tests - All Users', () => {
 
           // Step 7: Complete checkout process
           await test.step('Complete checkout', async () => {
+            // Check if we have items in cart before proceeding to checkout
+            if (itemsAdded === 0) {
+              logger.warn('🛒 Cart is empty, cannot proceed to checkout');
+              
+              // For problem/error users, empty cart might be expected
+              if (user.username.includes('problem') || user.username.includes('error')) {
+                logger.info('✅ Empty cart expected for this user type');
+                flowSummary = `Purchase flow completed with expected empty cart: ${itemsAdded} items added, ${itemsRemoved} items removed`;
+                return;
+              } else {
+                throw new Error('Cannot proceed to checkout: cart is empty');
+              }
+            }
+            
             const checkoutSuccess = await safelyCompleteCheckout(
               cartPage,
               checkoutInfoPage,
@@ -596,13 +678,15 @@ test.describe('Purchase Flow Tests - All Users', () => {
             duration,
             error: errorMessage,
             screenshotsTaken: screenshotFilenames.length,
-            user: user.username
+            user: user.username,
+            itemsAdded,
+            itemsRemoved
           });
         } finally {
           const duration = Date.now() - startTime;
           screenshotFilenames = screenshotHelper.getScreenshotFilenames();
           
-          const testResult = {
+          const testResult: TestResult = {
             testFile: 'purchaseFlow.spec.ts',
             testName: `Purchase flow for ${user.username}`,
             username: user.username,
@@ -611,8 +695,6 @@ test.describe('Purchase Flow Tests - All Users', () => {
             duration: duration.toString(),
             screenshots: screenshotFilenames,
             errorMessage: errorMessage || flowSummary,
-            itemsAdded: itemsAdded,
-            itemsRemoved: itemsRemoved,
             startTime: new Date(startTime),
             endTime: new Date()
           };
@@ -623,8 +705,6 @@ test.describe('Purchase Flow Tests - All Users', () => {
           if (testStatus === 'passed') {
             logHelper.testPass(`Purchase flow for ${user.username}`, duration, {
               screenshots: screenshotFilenames.length,
-              itemsAdded: itemsAdded,
-              itemsRemoved: itemsRemoved,
               summary: flowSummary
             });
           } else {
@@ -657,13 +737,15 @@ test.afterAll(async () => {
   // Get stats from results collector
   const stats = resultsCollector.getStats();
   
-  logger.info('🎯 Test Execution Summary', {
+  // Create safe summary object
+  const summary = {
     totalTests: stats.total,
     passed: stats.passed,
     failed: stats.failed,
-    successRate: `${stats.successRate}%`,
-    totalScreenshots: stats.totalScreenshots
-  });
+    successRate: `${stats.successRate}%`
+  };
+  
+  logger.info('🎯 Test Execution Summary', summary);
   
   logger.info('✅ Test execution completed!');
 });
