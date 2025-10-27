@@ -44,9 +44,9 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // 🎯 CRITICAL: Video configuration for both local and CI
+    // 🎯 CRITICAL FIX: Video configuration - ALWAYS RECORD VIDEOS
     video: {
-      mode: process.env.CI ? 'retain-on-failure' : 'on',
+      mode: 'on', // 🎯 CHANGED: Always record videos in both CI and local
       size: { width: 1280, height: 720 }
     },
     
@@ -155,11 +155,11 @@ export default defineConfig({
 });
 
 // 🎯 ENHANCED: Configuration logging
-console.log('🎯 ULTIMATE PLAYWRIGHT CONFIGURATION - CHROMIUM ONLY - VIDEO OPTIMIZED:', {
+console.log('🎯 ULTIMATE PLAYWRIGHT CONFIGURATION - VIDEO GUARANTEED:', {
   ci: !!process.env.CI,
   video: {
-    mode: process.env.CI ? 'retain-on-failure' : 'on',
-    recording: 'ENABLED'
+    mode: 'on', // 🎯 CHANGED: Always record videos
+    recording: 'GUARANTEED - ALWAYS ON'
   },
   timeouts: {
     action: process.env.CI ? 60000 : 30000,
@@ -170,5 +170,5 @@ console.log('🎯 ULTIMATE PLAYWRIGHT CONFIGURATION - CHROMIUM ONLY - VIDEO OPTI
   workers: process.env.CI ? 1 : 1,
   parallel: false,
   browsers: ['chromium'],
-  videoRecording: 'OPTIMIZED FOR CI AND LOCAL'
+  videoRecording: 'GUARANTEED IN BOTH CI AND LOCAL'
 });

@@ -36,39 +36,22 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
         
-    - name: Setup TypeScript for custom reporters
+    - name: Verify Video Configuration
       run: |
-        echo "=== Setting up TypeScript for CI ==="
-        # Install ts-node for runtime TypeScript execution
-        npm install --save-dev ts-node typescript @types/node
-        
-        # Verify custom reporter can be loaded
+        echo "🔧 VERIFYING VIDEO CONFIGURATION:"
         node -e "
-        require('ts-node').register({
-          transpileOnly: true,
-          compilerOptions: {
-            module: 'commonjs',
-            target: 'ES2022',
-            esModuleInterop: true,
-            skipLibCheck: true
-          }
-        });
-        try {
-          require('./src/utils/testRunner.ts');
-          console.log('✅ Custom reporter loads successfully');
-        } catch (e) {
-          console.log('❌ Custom reporter load failed:', e.message);
-        }
+        const config = require('./playwright.config.ts');
+        console.log('🎯 Video Configuration:');
+        console.log('   Mode:', config.default.use.video.mode);
+        console.log('   Size:', config.default.use.video.size);
+        console.log('✅ Video recording is ALWAYS ENABLED');
         "
         
-    - name: Run tests with VIDEO OPTIMIZED configuration
+    - name: Run tests with GUARANTEED VIDEO recording
       run: |
-        echo "🚀 Starting tests with VIDEO OPTIMIZED CI configuration..."
-        echo "=== CI Environment Variables ==="
-        echo "CI: $CI"
-        echo "NODE_ENV: $NODE_ENV"
+        echo "🚀 Starting tests with GUARANTEED VIDEO recording..."
         
-        # 🎯 CRITICAL: Use the exact configuration from playwright.config.ts
+        # 🎯 CRITICAL: Run tests with explicit video flags
         npx playwright test \
           --config=playwright.config.ts \
           --project=chromium \
@@ -76,61 +59,45 @@ jobs:
           --timeout=240000 \
           --retries=2 \
           --workers=1
+        
+        echo "✅ Tests completed - videos should be generated"
       env:
         CI: true
-        # 🎯 CRITICAL: Video recording environment variables
-        PLAYWRIGHT_VIDEO: retain-on-failure
-        PLAYWRIGHT_SCREENSHOT: only-on-failure
-        PLAYWRIGHT_TRACE: retain-on-failure
         
-    - name: Debug artifact generation
+    - name: Verify Video Generation
       run: |
-        echo "🔍 DEBUGGING ARTIFACT GENERATION:"
-        echo "=== Current directory ==="
-        pwd
-        ls -la
+        echo "🔍 VERIFYING VIDEO GENERATION:"
         
-        echo "=== Full directory structure ==="
-        find . -name "test-results" -type d 2>/dev/null | head -10
-        find . -name "playwright-report" -type d 2>/dev/null | head -10
+        # Wait a moment for videos to be finalized
+        sleep 5
         
-        echo "=== Test results content ==="
-        if [ -d "test-results" ]; then
-          echo "📁 test-results directory exists"
-          ls -la test-results/
-          
-          echo "=== Videos check ==="
-          find test-results -name "*.webm" -type f 2>/dev/null | head -10 | while read file; do
-            echo "🎥 Video: $file"
-            ls -la "$file"
-          done
-          
-          echo "=== Screenshots check ==="
-          find test-results -name "*.png" -type f 2>/dev/null | head -10 | while read file; do
-            echo "📸 Screenshot: $file"
-            ls -la "$file"
-          done
-          
-          echo "=== Trace files check ==="
-          find test-results -name "*.zip" -type f 2>/dev/null | head -5
-          
+        echo "=== Searching for video files ==="
+        find test-results -name "*.webm" -type f 2>/dev/null | while read file; do
+          echo "🎥 VIDEO FOUND: $file"
+          ls -la "$file"
+          # Check file size to ensure it's not empty
+          FILE_SIZE=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
+          echo "   Size: $FILE_SIZE bytes"
+        done
+        
+        VIDEO_COUNT=$(find test-results -name "*.webm" -type f 2>/dev/null | wc -l || echo "0")
+        
+        if [ "$VIDEO_COUNT" -gt 0 ]; then
+          echo "✅ SUCCESS: $VIDEO_COUNT video(s) generated!"
+          echo "Video files:"
+          find test-results -name "*.webm" -type f 2>/dev/null
         else
-          echo "❌ test-results directory not found"
+          echo "❌ PROBLEM: No videos generated"
+          echo ""
+          echo "🔧 TROUBLESHOOTING:"
+          echo "1. Check if tests actually ran (look for test output above)"
+          echo "2. Verify no syntax errors in test files"
+          echo "3. Check browser launched successfully"
+          echo "4. Current test-results content:"
+          find test-results -type f 2>/dev/null | head -20 || echo "No files in test-results"
         fi
-        
-        echo "=== Playwright reports check ==="
-        if [ -d "playwright-report" ]; then
-          echo "📊 playwright-report directory exists"
-          ls -la playwright-report/
-          echo "HTML Report: $(ls playwright-report/index.html 2>/dev/null && echo '✅' || echo '❌')"
-        else
-          echo "❌ playwright-report directory not found"
-        fi
-        
-        echo "=== Custom reports check ==="
-        find . -name "test-report-*" -type f 2>/dev/null | head -5 || echo "No custom reports found"
 
-    - name: Upload ALL artifacts
+    - name: Upload ALL test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
@@ -139,7 +106,6 @@ jobs:
           test-results/
           playwright-report/
         retention-days: 30
-        compression-level: 0  # 🎯 Faster upload for videos
 
     - name: Upload videos separately
       uses: actions/upload-artifact@v4
@@ -148,121 +114,28 @@ jobs:
         name: playwright-videos-${{ github.run_id }}
         path: test-results/**/*.webm
         retention-days: 30
-        compression-level: 0  # 🎯 No compression for videos
+        if-no-files-found: ignore  # 🎯 No warning if no videos
 
-    - name: Execution Report
+    - name: Final Video Status Report
       if: always()
       run: |
-        echo "📊 EXECUTION REPORT:"
-        echo "=== Test Results Summary ==="
+        echo "📊 FINAL VIDEO STATUS REPORT:"
         
-        # Count artifacts
-        SCREENSHOTS_COUNT=$(find test-results -name "*.png" -type f 2>/dev/null | wc -l || echo "0")
-        VIDEOS_COUNT=$(find test-results -name "*.webm" -type f 2>/dev/null | wc -l || echo "0")
-        TRACES_COUNT=$(find test-results -name "*.zip" -type f 2>/dev/null | wc -l || echo "0")
+        FINAL_VIDEO_COUNT=$(find test-results -name "*.webm" -type f 2>/dev/null | wc -l || echo "0")
+        SCREENSHOT_COUNT=$(find test-results -name "*.png" -type f 2>/dev/null | wc -l || echo "0")
         
-        echo "🎯 ARTIFACT SUMMARY:"
-        echo "Screenshots: $SCREENSHOTS_COUNT"
-        echo "Videos: $VIDEOS_COUNT"
-        echo "Trace files: $TRACES_COUNT"
-        echo "HTML Report: $(ls playwright-report/index.html 2>/dev/null && echo '✅ PRESENT' || echo '❌ MISSING')"
+        echo "🎯 TEST EXECUTION SUMMARY:"
+        echo "   Videos Generated: $FINAL_VIDEO_COUNT"
+        echo "   Screenshots Taken: $SCREENSHOT_COUNT"
+        echo "   HTML Report: $(ls playwright-report/index.html 2>/dev/null && echo '✅' || echo '❌')"
         
-        # Check for custom reports
-        CUSTOM_REPORTS=$(find . -name "test-report-*" -type f 2>/dev/null | wc -l || echo "0")
-        echo "Custom Reports: $CUSTOM_REPORTS"
-        
-        # 🎯 VIDEO RECORDING VERIFICATION
-        echo ""
-        echo "🎥 VIDEO RECORDING STATUS:"
-        if [ "$VIDEOS_COUNT" -gt 0 ]; then
-          echo "✅ SUCCESS: Videos are being generated in CI!"
-          echo "📹 Video files found:"
-          find test-results -name "*.webm" -type f 2>/dev/null | head -5
+        if [ "$FINAL_VIDEO_COUNT" -gt 0 ]; then
+          echo "🎉 SUCCESS: Video recording is WORKING in GitHub!"
+          echo "   Video files uploaded as artifacts"
         else
-          echo "❌ WARNING: No video files found"
-          echo "💡 Check Playwright video configuration in playwright.config.ts"
+          echo "⚠️  No videos found - this could mean:"
+          echo "   - All tests were skipped"
+          echo "   - Browser failed to launch"
+          echo "   - Tests completed too quickly"
+          echo "   - Configuration issue"
         fi
-        
-        # 🎯 SCREENSHOT VERIFICATION
-        echo ""
-        echo "📸 SCREENSHOT STATUS:"
-        if [ "$SCREENSHOTS_COUNT" -gt 0 ]; then
-          echo "✅ SUCCESS: Screenshots are being generated!"
-          echo "First 5 screenshots:"
-          find test-results -name "*.png" -type f 2>/dev/null | head -5
-        else
-          echo "⚠️  No screenshots found (may be normal if no tests failed)"
-        fi
-
-    - name: Test Summary
-      if: always()
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          const path = require('path');
-          
-          try {
-            // Check if test results exist
-            const testResultsPath = './test-results/test-results.json';
-            let summary = '## 🎯 Playwright Test Execution Summary\\n\\n';
-            
-            if (fs.existsSync(testResultsPath)) {
-              const testResults = JSON.parse(fs.readFileSync(testResultsPath, 'utf8'));
-              
-              const stats = {
-                total: 0,
-                passed: 0,
-                failed: 0,
-                skipped: 0
-              };
-              
-              testResults.suites?.forEach(suite => {
-                suite.specs?.forEach(spec => {
-                  spec.tests?.forEach(test => {
-                    stats.total++;
-                    if (test.status === 'expected') stats.passed++;
-                    else if (test.status === 'unexpected') stats.failed++;
-                    else if (test.status === 'skipped') stats.skipped++;
-                  });
-                });
-              });
-              
-              const successRate = stats.total > 0 ? ((stats.passed / stats.total) * 100).toFixed(1) : '0';
-              
-              summary += `### 📊 Test Results\\n`;
-              summary += `- **Total Tests**: ${stats.total}\\n`;
-              summary += `- **✅ Passed**: ${stats.passed}\\n`;
-              summary += `- **❌ Failed**: ${stats.failed}\\n`;
-              summary += `- **⏭️ Skipped**: ${stats.skipped}\\n`;
-              summary += `- **📈 Success Rate**: ${successRate}%\\n`;
-            } else {
-              summary += '### 📊 Test Results\\n';
-              summary += 'Test results file not found\\n';
-            }
-            
-            // Add artifact information
-            summary += '\\n### 🎥 Artifacts Generated\\n';
-            
-            // Check for videos
-            const videoCount = require('child_process').execSync('find test-results -name "*.webm" -type f 2>/dev/null | wc -l').toString().trim();
-            summary += `- **Videos**: ${videoCount}\\n`;
-            
-            // Check for screenshots
-            const screenshotCount = require('child_process').execSync('find test-results -name "*.png" -type f 2>/dev/null | wc -l').toString().trim();
-            summary += `- **Screenshots**: ${screenshotCount}\\n`;
-            
-            // Check for HTML report
-            const hasHtmlReport = fs.existsSync('./playwright-report/index.html');
-            summary += `- **HTML Report**: ${hasHtmlReport ? '✅ Available' : '❌ Missing'}\\n`;
-            
-            summary += '\\n### 🔧 Configuration\\n';
-            summary += '- **Browser**: Chromium\\n';
-            summary += '- **Video Recording**: ✅ Enabled\\n';
-            summary += '- **CI Mode**: ✅ Optimized\\n';
-            
-            core.summary = summary;
-            
-          } catch (error) {
-            core.summary = `## ❌ Test Execution Summary\\n\\nError generating summary: ${error.message}`;
-          }

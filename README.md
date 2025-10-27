@@ -15,41 +15,42 @@ A comprehensive test automation framework for SauceDemo e-commerce platform usin
 🏗️ Project Structure
 project-root/
 ├── .github/
-│   └── workflows/
-│       └── playwright.yml
+│ └── workflows/
+│ └── playwright.yml # GitHub Actions CI/CD
 ├── data/
-│   └── credentials.json
+│ └── credentials.json # Test user credentials
 ├── src/
-│   ├── pages/
-│   │   ├── CartPage.ts
-│   │   ├── CheckoutCompletePage.ts
-│   │   ├── CheckoutInfoPage.ts
-│   │   ├── LoginPage.ts
-│   │   ├── OverviewPage.ts
-│   │   └── ProductsPage.ts
-│   ├── tests/
-│   │   ├── global-setup.ts          
-│   │   ├── global-teardown.ts       
-│   │   ├── error-user-video.spec.ts
-│   │   ├── locked-user-video.spec.ts
-│   │   ├── problem-user-video.spec.ts
-│   │   ├── purchaseFlow.spec.ts
-│   │   └── standard-user-video.spec.ts
-│   ├── utils/
-│   │   ├── customWait.ts
-│   │   ├── logger.ts
-│   │   ├── reportGenerator.ts
-│   │   ├── results-collector.ts
-│   │   ├── screenshotHelper.ts
-│   │   └── testRunner.ts
-│   └── types/
-│       └── credentials.d.ts
+│ ├── pages/ # Page Object Model
+│ │ ├── CartPage.ts
+│ │ ├── CheckoutCompletePage.ts
+│ │ ├── CheckoutInfoPage.ts
+│ │ ├── LoginPage.ts
+│ │ ├── OverviewPage.ts
+│ │ └── ProductsPage.ts
+│ ├── tests/ # Test specifications
+│ │ ├── diagnostic.spec.ts # Health check tests
+│ │ ├── error-user-video.spec.ts # Error user scenarios
+│ │ ├── locked-user-video.spec.ts # Locked user scenarios
+│ │ ├── problem-user-video.spec.ts # Problem user scenarios
+│ │ ├── purchaseFlow.spec.ts # Complete purchase flow
+│ │ └── standard-user-video.spec.ts # Standard user scenarios
+│ ├── utils/ # Utility classes
+│ │ ├── customWait.ts # Custom wait strategies
+│ │ ├── logger.ts # Winston logging
+│ │ ├── reportGenerator.ts # Custom report generation
+│ │ ├── results-collector.ts # Test results aggregation
+│ │ ├── screenshotHelper.ts # Screenshot management
+│ │ └── testRunner.ts # Custom test runner
+│ └── types/ # TypeScript definitions
+│ └── credentials.d.ts # Credential type definitions
 ├── .gitignore
 ├── package-lock.json
 ├── package.json
-├── playwright.config.ts
+├── playwright.config.ts # Playwright configuration
 ├── README.md
-└── tsconfig.json
+└── tsconfig.json # TypeScript configuration
+
+text
 
 🎪 Multi-User Test Automation with Conditional Execution
 The framework intelligently loops through all user types and executes conditional checkout flows:
@@ -64,7 +65,7 @@ User Type	                 Test Focus	                Visual Documentation
                                                           (identical UI)
 🛠️ Quick Start
 Prerequisites
-•	Node.js 16+
+•	Node.js 18+
 •	npm or yarn
 
 # Installation
