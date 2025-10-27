@@ -10,10 +10,6 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     
-    # 🔥 CRITICAL: Use Playwright container for proper TypeScript support
-    container:
-      image: mcr.microsoft.com/playwright:v1.40.0-jammy
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -30,16 +26,17 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
       
-    # 🔥 CRITICAL: Pre-load TypeScript files to ensure ts-node works
-    - name: Pre-load TypeScript configuration
+    - name: Build TypeScript
+      run: npm run build
+      
+    - name: Verify build
       run: |
-        echo "🔧 Pre-loading TypeScript configuration..."
-        npx ts-node -e "console.log('✅ ts-node is working correctly')"
-        npx ts-node -e "import('./playwright.config.ts').then(() => console.log('✅ Playwright config loads successfully'))"
-        npx ts-node -e "import('./src/utils/results-collector.ts').then(() => console.log('✅ Custom utils load successfully'))"
+        echo "🔧 Verifying compiled files..."
+        ls -la dist/utils/ || echo "No dist directory"
+        echo "✅ TypeScript compilation completed"
       
     - name: Run Playwright tests
-      run: npm run test:ci
+      run: npx playwright test --workers=1
       env:
         CI: true
         

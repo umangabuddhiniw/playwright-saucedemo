@@ -1,15 +1,9 @@
-// playwright.config.ts
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * 🎯 PLAYWRIGHT CONFIGURATION
- * - Works locally and in CI
- * - No changes to your existing functionality
- */
 export default defineConfig({
   testDir: './src/tests',
   
-  // Your existing configuration - KEEP EVERYTHING EXACTLY AS IS
+  
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -18,9 +12,23 @@ export default defineConfig({
   globalSetup: './src/tests/global-setup.ts',
   globalTeardown: './src/tests/global-teardown.ts',
   
-  reporter: [
+  // 🔥 UPDATED: Use compiled reporter in CI, source in local
+  reporter: process.env.CI ? [
     ['list'],
-    ['./src/utils/testRunner.ts'],
+    ['./dist/utils/testRunner.js'],  // ✅ Compiled in CI
+    ['html', { 
+      outputFolder: 'playwright-report', 
+      open: 'never' 
+    }],
+    ['json', { 
+      outputFile: 'test-results/test-results.json' 
+    }],
+    ['junit', { 
+      outputFile: 'test-results/junit-results.xml' 
+    }]
+  ] : [
+    ['list'],
+    ['./src/utils/testRunner.ts'],  // ✅ TypeScript in local
     ['html', { 
       outputFolder: 'playwright-report', 
       open: 'never' 
@@ -36,7 +44,7 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // 🎯 VIDEO CONFIGURATION - KEEP YOUR EXISTING SETTINGS
+    // Your existing use configuration...
     video: {
       mode: 'on',
       size: { width: 1280, height: 720 }
@@ -83,7 +91,6 @@ export default defineConfig({
   },
 });
 
-// Your existing logging - KEEP THIS
 console.log('🎯 PLAYWRIGHT CONFIGURATION LOADED:', {
   ci: !!process.env.CI,
   video: 'on',
