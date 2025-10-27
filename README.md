@@ -50,7 +50,6 @@ project-root/
 ├── README.md
 └── tsconfig.json # TypeScript configuration
 
-text
 
 🎪 Multi-User Test Automation with Conditional Execution
 The framework intelligently loops through all user types and executes conditional checkout flows:

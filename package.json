@@ -4,7 +4,7 @@
   "description": "SauceDemo E-commerce automation with Playwright and TypeScript",
   "scripts": {
     "test": "npx playwright test",
-    "test:ci": "npx playwright test --workers=1",
+    "test:ci": "npx playwright test --config=playwright.config.ts --workers=1",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:ui": "npx playwright test --ui",
@@ -16,31 +16,31 @@
     "test:video-users": "npx playwright test src/tests/standard-user-video.spec.ts src/tests/problem-user-video.spec.ts src/tests/locked-user-video.spec.ts src/tests/error-user-video.spec.ts --project=chromium",
     "test:purchase-flows": "npx playwright test src/tests/purchaseFlow.spec.ts --project=chromium",
     
-    "test:report": "npx ts-node src/utils/testRunner.ts",
+    "test:report": "npx playwright show-report",
     "test:full": "npm run test && npm run test:report",
     
     "test:parallel": "npx playwright test --workers=4",
     "test:retry": "npx playwright test --retries=2",
     "test:trace": "npx playwright test --trace=on",
-    "test:slow": "npx playwright test --timeout=60000",
+    "test:slow": "npx playwright test --timeout=120000",
     
-    "report": "npx playwright show-report playwright-report",
-    "report:open": "npx playwright show-report playwright-report",
+    "report": "npx playwright show-report",
+    "report:open": "npx playwright show-report",
     
-    "clean": "npx rimraf test-results playwright-report",
-    "clean:all": "npx rimraf test-results playwright-report node_modules package-lock.json",
+    "clean": "npx rimraf test-results playwright-report dist",
+    "clean:all": "npx rimraf test-results playwright-report node_modules package-lock.json dist",
     "clean:install": "npm run clean:all && npm install",
     
     "install:browsers": "npx playwright install --with-deps",
     "install:ci": "npx playwright install chromium",
     
     "typecheck": "npx tsc --noEmit",
-    "lint": "npx eslint . --ext .ts,.tsx",
-    "audit": "npm audit",
-    "audit:fix": "npm audit fix",
+    "build": "tsc",
     
-    "structure": "find test-results -type f -name '*.webm' -o -name '*.html' -o -name '*.json' -o -name '*.log' -o -name '*.png' | head -20 || echo 'No test results found'",
-    "verify": "npm run typecheck && npm run test:chromium -- --reporter=line"
+    "structure": "find . -type f -name '*.webm' -o -name '*.html' -o -name '*.json' -o -name '*.log' -o -name '*.png' | head -20 || echo 'No test results found'",
+    "verify": "npm run typecheck && npm run test:chromium -- --reporter=line",
+    
+    "playwright:config": "npx ts-node -e \"import('./playwright.config.ts').then(c => console.log('✅ Config loaded'))\""
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

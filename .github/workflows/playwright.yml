@@ -1,4 +1,4 @@
-name: Playwright Tests with Video Recording
+name: Playwright Tests
 
 on:
   push:
@@ -12,11 +12,8 @@ env:
 
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 30
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [18.x]
 
     steps:
     - name: Checkout code
@@ -25,7 +22,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 18.x
         cache: 'npm'
         
     - name: Install dependencies
@@ -34,108 +31,36 @@ jobs:
         npx playwright --version
         
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install --with-deps chromium
         
-    - name: Verify Video Configuration
+    - name: Create test directories
       run: |
-        echo "🔧 VERIFYING VIDEO CONFIGURATION:"
-        node -e "
-        const config = require('./playwright.config.ts');
-        console.log('🎯 Video Configuration:');
-        console.log('   Mode:', config.default.use.video.mode);
-        console.log('   Size:', config.default.use.video.size);
-        console.log('✅ Video recording is ALWAYS ENABLED');
-        "
+        mkdir -p test-results
+        mkdir -p playwright-report
+        echo "✅ Test directories created"
         
-    - name: Run tests with GUARANTEED VIDEO recording
+    # ✅ CRITICAL: Use your corrected test:ci script
+    - name: Run Playwright tests
       run: |
-        echo "🚀 Starting tests with GUARANTEED VIDEO recording..."
+        echo "🚀 Running Playwright tests with explicit config..."
+        npm run test:ci
         
-        # 🎯 CRITICAL: Run tests with explicit video flags
-        npx playwright test \
-          --config=playwright.config.ts \
-          --project=chromium \
-          --reporter=list,html,json,junit \
-          --timeout=240000 \
-          --retries=2 \
-          --workers=1
-        
-        echo "✅ Tests completed - videos should be generated"
-      env:
-        CI: true
-        
-    - name: Verify Video Generation
-      run: |
-        echo "🔍 VERIFYING VIDEO GENERATION:"
-        
-        # Wait a moment for videos to be finalized
-        sleep 5
-        
-        echo "=== Searching for video files ==="
-        find test-results -name "*.webm" -type f 2>/dev/null | while read file; do
-          echo "🎥 VIDEO FOUND: $file"
-          ls -la "$file"
-          # Check file size to ensure it's not empty
-          FILE_SIZE=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "0")
-          echo "   Size: $FILE_SIZE bytes"
-        done
-        
-        VIDEO_COUNT=$(find test-results -name "*.webm" -type f 2>/dev/null | wc -l || echo "0")
-        
-        if [ "$VIDEO_COUNT" -gt 0 ]; then
-          echo "✅ SUCCESS: $VIDEO_COUNT video(s) generated!"
-          echo "Video files:"
-          find test-results -name "*.webm" -type f 2>/dev/null
-        else
-          echo "❌ PROBLEM: No videos generated"
-          echo ""
-          echo "🔧 TROUBLESHOOTING:"
-          echo "1. Check if tests actually ran (look for test output above)"
-          echo "2. Verify no syntax errors in test files"
-          echo "3. Check browser launched successfully"
-          echo "4. Current test-results content:"
-          find test-results -type f 2>/dev/null | head -20 || echo "No files in test-results"
-        fi
-
-    - name: Upload ALL test results
+    - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-complete-results-${{ github.run_id }}
+        name: playwright-results
         path: |
           test-results/
           playwright-report/
         retention-days: 30
+        if-no-files-found: warn
 
-    - name: Upload videos separately
+    - name: Upload videos
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: playwright-videos-${{ github.run_id }}
+        name: playwright-videos
         path: test-results/**/*.webm
         retention-days: 30
-        if-no-files-found: ignore  # 🎯 No warning if no videos
-
-    - name: Final Video Status Report
-      if: always()
-      run: |
-        echo "📊 FINAL VIDEO STATUS REPORT:"
-        
-        FINAL_VIDEO_COUNT=$(find test-results -name "*.webm" -type f 2>/dev/null | wc -l || echo "0")
-        SCREENSHOT_COUNT=$(find test-results -name "*.png" -type f 2>/dev/null | wc -l || echo "0")
-        
-        echo "🎯 TEST EXECUTION SUMMARY:"
-        echo "   Videos Generated: $FINAL_VIDEO_COUNT"
-        echo "   Screenshots Taken: $SCREENSHOT_COUNT"
-        echo "   HTML Report: $(ls playwright-report/index.html 2>/dev/null && echo '✅' || echo '❌')"
-        
-        if [ "$FINAL_VIDEO_COUNT" -gt 0 ]; then
-          echo "🎉 SUCCESS: Video recording is WORKING in GitHub!"
-          echo "   Video files uploaded as artifacts"
-        else
-          echo "⚠️  No videos found - this could mean:"
-          echo "   - All tests were skipped"
-          echo "   - Browser failed to launch"
-          echo "   - Tests completed too quickly"
-          echo "   - Configuration issue"
-        fi
+        if-no-files-found: ignore

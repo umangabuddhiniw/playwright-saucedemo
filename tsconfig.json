@@ -21,6 +21,10 @@
       "@data/*": ["./data/*"]
     }
   },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  },
   "include": [
     "src/**/*",
     "playwright.config.ts",
@@ -31,8 +35,6 @@
     "dist",
     "test-results",
     "playwright-report",
-    "blob-report",
-    "screenshots",
-    "videos"
+    "blob-report"
   ]
 }
