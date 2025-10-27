@@ -4,7 +4,7 @@
   "description": "SauceDemo E-commerce automation with Playwright and TypeScript",
   "scripts": {
     "test": "npx playwright test",
-    "test:ci": "npx playwright test --workers=1",
+    "test:ci": "NODE_OPTIONS=\"--require ts-node/register\" npx playwright test --workers=1",
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:ui": "npx playwright test --ui",

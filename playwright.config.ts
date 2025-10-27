@@ -3,7 +3,6 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './src/tests',
   
-  
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -12,23 +11,10 @@ export default defineConfig({
   globalSetup: './src/tests/global-setup.ts',
   globalTeardown: './src/tests/global-teardown.ts',
   
-  // 🔥 UPDATED: Use compiled reporter in CI, source in local
-  reporter: process.env.CI ? [
+  // 🔥 FIXED: Use TypeScript reporter in both environments
+  reporter: [
     ['list'],
-    ['./dist/utils/testRunner.js'],  // ✅ Compiled in CI
-    ['html', { 
-      outputFolder: 'playwright-report', 
-      open: 'never' 
-    }],
-    ['json', { 
-      outputFile: 'test-results/test-results.json' 
-    }],
-    ['junit', { 
-      outputFile: 'test-results/junit-results.xml' 
-    }]
-  ] : [
-    ['list'],
-    ['./src/utils/testRunner.ts'],  // ✅ TypeScript in local
+    ['./src/utils/testRunner.ts'],  // ✅ TypeScript in both local and CI
     ['html', { 
       outputFolder: 'playwright-report', 
       open: 'never' 
@@ -44,7 +30,6 @@ export default defineConfig({
   use: {
     baseURL: 'https://www.saucedemo.com',
     
-    // Your existing use configuration...
     video: {
       mode: 'on',
       size: { width: 1280, height: 720 }

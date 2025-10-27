@@ -26,17 +26,14 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
       
-    - name: Build TypeScript
-      run: npm run build
-      
-    - name: Verify build
+    - name: Verify TypeScript setup
       run: |
-        echo "🔧 Verifying compiled files..."
-        ls -la dist/utils/ || echo "No dist directory"
-        echo "✅ TypeScript compilation completed"
+        echo "🔧 Testing TypeScript setup..."
+        npx tsc --noEmit
+        echo "✅ TypeScript compilation successful"
       
     - name: Run Playwright tests
-      run: npx playwright test --workers=1
+      run: npm run test:ci
       env:
         CI: true
         
