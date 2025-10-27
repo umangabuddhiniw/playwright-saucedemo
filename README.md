@@ -77,33 +77,47 @@ cd playwright-saucedemo
 npm install
 
 ## Install Playwright browsers
-npx playwright install
+npx playwright install --with-deps
 
 ## Running Tests
 
-## Run all tests in headless mode
-npx playwright test
+### Run all tests in headless mode (TypeScript)
+npm run test
 
-## Run tests with visible browser UI
-npx playwright test --headed
+### Run tests in CI mode (single worker)
+npm run test:ci
 
-## Run specific test file
-npx playwright test purchaseFlow.spec.ts --headed
+### Run tests with visible browser UI
+npm run test:headed
 
-## Debug mode
-npx playwright test --debug
+### Run specific test files
+npm run test:video-users
+npm run test:purchase-flows
 
-# Viewing Reports
+### Debug mode
+npm run test:debug
 
-## Open interactive HTML report
+### UI Mode (Interactive)
+npm run test:ui
+
+### Run with tracing
+npm run test:trace
+
+## Viewing Reports
+
+### Open interactive HTML report
+npm run report
+
+### Open Playwright's built-in report
 npx playwright show-report
 
 # Check test artifacts
 
-test-results/
-├── screenshots/    # Step-by-step visual documentation
-├── reports/        # HTML reports with galleries
-└── logs/          # Detailed execution logs
+## Test Results
+- **Videos**: `test-results/*-video-*/`
+- **Reports**: `test-results/reports/` (Custom) + `playwright-report/` (Playwright)
+- **Screenshots**: `test-results/screenshots/`
+- **Logs**: `test-results/logs/`
 
 📊 Test Scenarios
 
