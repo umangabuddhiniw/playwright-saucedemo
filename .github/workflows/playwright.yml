@@ -37,6 +37,12 @@ jobs:
       env:
         CI: true
         
+    # 🔥 OPTIONAL: Quick verification of generated files
+    - name: Verify generated files
+      run: |
+        echo "📁 Generated files overview:"
+        find test-results/ -name "*.html" -o -name "*.json" -o -name "*.webm" | head -10 || echo "No test results found"
+        
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
